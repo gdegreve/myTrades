@@ -318,3 +318,31 @@ input, button, textarea, select{
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Dash DataTable body cells */
+.dash-table-container .dash-cell {
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+/* Ensure editable inputs inside table also match */
+.dash-table-container input {
+    font-size: 13px;
+}
+
+/* Make Bootstrap selects match input height */
+.form-select {
+  height: 46px;
+  padding: 10px 36px 10px 10px; /* left matches inputs, right keeps arrow space */
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  line-height: normal;
+  box-sizing: border-box;
+}
+
+/* Remove Bootstrap focus glow, keep your clean look */
+.form-select:focus {
+  box-shadow: none;
+  border-color: var(--border);
+}

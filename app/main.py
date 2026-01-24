@@ -1,3 +1,4 @@
+import dash_bootstrap_components as dbc
 from dash import Dash, Input, Output, html
 
 from app.layout import build_layout
@@ -24,7 +25,7 @@ app = Dash(
     __name__,
     suppress_callback_exceptions=True,
     title="MyTrading – Dash",
-    external_stylesheets=external_stylesheets,
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
 )
 
 app.layout = build_layout()

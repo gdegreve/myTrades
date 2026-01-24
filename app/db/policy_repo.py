@@ -103,6 +103,99 @@ def load_policy_snapshot(portfolio_id: int) -> dict[str, Any]:
         conn.close()
 
 
+def save_policy_snapshot(
+    portfolio_id: int,
+    policy: dict[str, Any],
+    sector_targets: list[dict[str, Any]],
+) -> None:
+    """Save policy + sector targets in a single transaction.
+
+    Validation is expected to happen in the callback layer.
+    This function trusts input and writes atomically.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+
+        # Upsert policy
+        cur.execute(
+            """
+            INSERT INTO portfolio_policy (
+                portfolio_id,
+                benchmark_ticker,
+                risk_profile,
+                cash_min_pct,
+                cash_target_pct,
+                cash_max_pct,
+                max_position_pct,
+                max_sector_pct,
+                rebalance_freq,
+                drift_trigger_pct,
+                rebalance_method,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(portfolio_id) DO UPDATE SET
+                benchmark_ticker = excluded.benchmark_ticker,
+                risk_profile = excluded.risk_profile,
+                cash_min_pct = excluded.cash_min_pct,
+                cash_target_pct = excluded.cash_target_pct,
+                cash_max_pct = excluded.cash_max_pct,
+                max_position_pct = excluded.max_position_pct,
+                max_sector_pct = excluded.max_sector_pct,
+                rebalance_freq = excluded.rebalance_freq,
+                drift_trigger_pct = excluded.drift_trigger_pct,
+                rebalance_method = excluded.rebalance_method,
+                updated_at = excluded.updated_at
+            """,
+            (
+                portfolio_id,
+                policy.get("benchmark_ticker"),
+                policy.get("risk_profile"),
+                policy.get("cash_min_pct"),
+                policy.get("cash_target_pct"),
+                policy.get("cash_max_pct"),
+                policy.get("max_position_pct"),
+                policy.get("max_sector_pct"),
+                policy.get("rebalance_freq"),
+                policy.get("drift_trigger_pct"),
+                policy.get("rebalance_method"),
+            ),
+        )
+
+        # Clear existing sector targets
+        cur.execute(
+            "DELETE FROM portfolio_sector_targets WHERE portfolio_id=?",
+            (portfolio_id,),
+        )
+
+        # Insert new sector targets (support both schema variants)
+        if _table_exists(conn, "portfolio_sector_targets"):
+            if _column_exists(conn, "portfolio_sector_targets", "sector_name"):
+                sector_col = "sector_name"
+            else:
+                sector_col = "sector"
+
+            for target in sector_targets:
+                cur.execute(
+                    f"""
+                    INSERT INTO portfolio_sector_targets
+                        (portfolio_id, {sector_col}, target_pct, min_pct, max_pct)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        portfolio_id,
+                        target.get("sector"),
+                        target.get("target_pct"),
+                        target.get("min_pct"),
+                        target.get("max_pct"),
+                    ),
+                )
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
 # Backwards-compatible alias
 def load_policy(portfolio_id: int) -> dict[str, Any]:
     return load_policy_snapshot(portfolio_id)
