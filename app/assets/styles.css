@@ -319,6 +319,21 @@ input, button, textarea, select{
   cursor: not-allowed;
 }
 
+.btn-secondary{
+  background: var(--hover);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.btn-secondary:hover{
+  background: #e2e8f0;
+}
+
 /* Dash DataTable body cells */
 .dash-table-container .dash-cell {
     font-size: 13px;
@@ -345,4 +360,29 @@ input, button, textarea, select{
 .form-select:focus {
   box-shadow: none;
   border-color: var(--border);
+}
+
+/* ------------------------------------------------------------------
+   Status bar (Design page)
+   ------------------------------------------------------------------ */
+.status-bar{
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 14px;
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------
+   Debug panel (Design page)
+   ------------------------------------------------------------------ */
+.debug-panel{
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: #78350f;
 }

@@ -60,6 +60,29 @@ def ensure_schema() -> None:
             """
         )
 
+        # Region targets table (mirrors sector targets structure).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS portfolio_region_targets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                region_name TEXT NOT NULL,
+                target_pct REAL NOT NULL,
+                min_pct REAL NOT NULL,
+                max_pct REAL NOT NULL,
+                FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE,
+                UNIQUE(portfolio_id, region_name)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_region_targets_portfolio
+            ON portfolio_region_targets(portfolio_id);
+            """
+        )
+
         # Stamp schema touch
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         cur.execute(
