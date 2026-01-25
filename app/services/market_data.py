@@ -19,6 +19,9 @@ from typing import Any
 
 from app.db.prices_repo import get_latest_daily_closes, upsert_daily_closes
 
+# Debug flag: set to True to print yfinance DataFrame structure diagnostics
+DEBUG_YFINANCE = True
+
 
 def get_latest_daily_closes_cached(
     tickers: list[str],
@@ -132,6 +135,7 @@ def _fetch_yfinance_batch(tickers: list[str]) -> tuple[dict[str, dict[str, Any]]
         - Fetches 10 days of data to ensure recent close even on weekends/holidays
         - Takes most recent available date's close price
         - interval='1d', auto_adjust=False, progress=False for clean batch operation
+        - Supports multiple yfinance DataFrame column layouts (MultiIndex variations)
     """
     try:
         import yfinance as yf
@@ -151,8 +155,16 @@ def _fetch_yfinance_batch(tickers: list[str]) -> tuple[dict[str, dict[str, Any]]
             group_by="ticker",
             auto_adjust=False,
             progress=False,
-            show_errors=False,
+            #show_errors=False,
         )
+
+        if DEBUG_YFINANCE:
+            print(f"\n[DEBUG] yfinance batch fetch for {len(tickers)} ticker(s)")
+            print(f"[DEBUG] DataFrame shape: {data.shape}")
+            print(f"[DEBUG] DataFrame type: {type(data)}")
+            if hasattr(data.columns, 'nlevels'):
+                print(f"[DEBUG] Column levels: {data.columns.nlevels}")
+            print(f"[DEBUG] Columns (first 10): {list(data.columns[:10])}")
 
         result = {}
         errors = []
@@ -160,39 +172,70 @@ def _fetch_yfinance_batch(tickers: list[str]) -> tuple[dict[str, dict[str, Any]]
         # Handle single ticker vs multiple tickers (different DataFrame structure)
         if len(tickers) == 1:
             ticker = tickers[0]
-            if not data.empty and "Close" in data.columns:
-                # Get most recent non-null close
-                close_series = data["Close"].dropna()
-                if not close_series.empty:
-                    latest_date = close_series.index[-1]
-                    latest_close = close_series.iloc[-1]
-                    result[ticker] = {
-                        "close": float(latest_close),
-                        "date": latest_date.strftime("%Y-%m-%d"),
-                    }
-                else:
-                    errors.append(ticker)
+            close_series = None
+
+            # Try multiple access patterns for single ticker
+            if not data.empty:
+                # Pattern 1: Flat columns with "Close"
+                if "Close" in data.columns:
+                    close_series = data["Close"].dropna()
+                # Pattern 2: MultiIndex with (ticker, "Close")
+                elif (ticker, "Close") in data.columns:
+                    close_series = data[(ticker, "Close")].dropna()
+                # Pattern 3: MultiIndex with ("Close", ticker)
+                elif ("Close", ticker) in data.columns:
+                    close_series = data[("Close", ticker)].dropna()
+                # Pattern 4: Ticker as top-level column group
+                elif ticker in data.columns:
+                    try:
+                        close_series = data[ticker]["Close"].dropna()
+                    except (KeyError, TypeError):
+                        pass
+
+            if close_series is not None and not close_series.empty:
+                latest_date = close_series.index[-1]
+                latest_close = close_series.iloc[-1]
+                result[ticker] = {
+                    "close": float(latest_close),
+                    "date": latest_date.strftime("%Y-%m-%d"),
+                }
             else:
                 errors.append(ticker)
         else:
             # Multiple tickers: data has multi-level columns
+            # Try multiple access patterns for each ticker
             for ticker in tickers:
+                close_series = None
+
                 try:
+                    # Pattern 1: MultiIndex (ticker, "Close")
                     if (ticker, "Close") in data.columns:
                         close_series = data[(ticker, "Close")].dropna()
-                        if not close_series.empty:
-                            latest_date = close_series.index[-1]
-                            latest_close = close_series.iloc[-1]
-                            result[ticker] = {
-                                "close": float(latest_close),
-                                "date": latest_date.strftime("%Y-%m-%d"),
-                            }
-                        else:
-                            errors.append(ticker)
+                    # Pattern 2: MultiIndex ("Close", ticker)
+                    elif ("Close", ticker) in data.columns:
+                        close_series = data[("Close", ticker)].dropna()
+                    # Pattern 3: Ticker as top-level column group
+                    elif ticker in data.columns:
+                        try:
+                            close_series = data[ticker]["Close"].dropna()
+                        except (KeyError, TypeError):
+                            pass
+
+                    if close_series is not None and not close_series.empty:
+                        latest_date = close_series.index[-1]
+                        latest_close = close_series.iloc[-1]
+                        result[ticker] = {
+                            "close": float(latest_close),
+                            "date": latest_date.strftime("%Y-%m-%d"),
+                        }
                     else:
                         errors.append(ticker)
                 except Exception:
                     errors.append(ticker)
+
+        if DEBUG_YFINANCE:
+            print(f"[DEBUG] Successfully fetched: {list(result.keys())}")
+            print(f"[DEBUG] Failed to fetch: {errors}\n")
 
         return result, errors
 
