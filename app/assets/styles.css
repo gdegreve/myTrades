@@ -5,17 +5,47 @@
    Enforce one font everywhere (sidebar + pages + DataTable)
    ------------------------------------------------------------------ */
 :root{
-  --bg: #f6f7fb;
-  --panel: #ffffff;
-  --border: #e7e9f0;
-  --text: #111827;
-  --muted: #6b7280;
+  /* Dark theme: deep navy with blue gradients */
+  --bg-0: #050B1A;
+  --bg-1: #08142D;
+  --bg-2: #0A1E3F;
 
-  /* teal like the reference */
-  --brand: #0ea5a5;
-  --brand-weak: #e6fffb;
+  /* Surface / cards: glassy look */
+  --surface: rgba(10, 24, 55, 0.62);
+  --surface-2: rgba(12, 30, 70, 0.55);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.12);
 
-  --hover: #f1f5f9;
+  /* Shadows & highlights */
+  --shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 10px 22px rgba(0, 0, 0, 0.28);
+  --inner-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  /* Text: brighter for readability */
+  --text: rgba(255, 255, 255, 0.92);
+  --text-strong: rgba(255, 255, 255, 0.98);
+  --text-muted: rgba(255, 255, 255, 0.68);
+
+  /* Accents: blue/cyan only (NO green) */
+  --accent: #2D7DFF;
+  --accent-2: #32C5FF;
+  --accent-soft: rgba(45, 125, 255, 0.16);
+  --accent-soft-2: rgba(50, 197, 255, 0.14);
+
+  /* Status colors */
+  --danger: #FF4D6D;
+  --warning: #FFB020;
+  --ok: #2BD576;
+
+  /* Legacy mappings for existing selectors */
+  --bg: var(--bg-0);
+  --panel: var(--surface);
+  --card: var(--surface);
+  --card-border: var(--border);
+  --muted: var(--text-muted);
+  --brand: var(--accent);
+  --brand-weak: var(--accent-soft);
+  --hover: rgba(255, 255, 255, 0.06);
 }
 
 /* Ensure all app text inherits the same font */
@@ -27,7 +57,10 @@ html, body{
   height: 100%;
   margin: 0;
   color: var(--text);
-  background: var(--bg);
+  background: radial-gradient(1200px 600px at 20% 10%, rgba(45, 125, 255, 0.18), transparent 55%),
+              radial-gradient(900px 500px at 75% 30%, rgba(50, 197, 255, 0.14), transparent 55%),
+              linear-gradient(180deg, var(--bg-0), var(--bg-1));
+  background-attachment: fixed;
 }
 
 /* Dash components sometimes set their own font; enforce it */
@@ -48,7 +81,7 @@ input, button, textarea, select{
 /* Sidebar */
 .sidebar{
   width: 260px;
-  background: var(--panel);
+  background: rgba(6, 11, 26, 0.85);
   border-right: 1px solid var(--border);
   box-sizing: border-box;
   padding: 18px 14px;
@@ -57,6 +90,7 @@ input, button, textarea, select{
   transition: width 160ms ease;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(8px);
 }
 
 .sidebar.collapsed{ width: 78px; }
@@ -161,18 +195,24 @@ input, button, textarea, select{
   color: var(--text);
 }
 
-.nav-item:hover{ background: var(--hover); }
+.nav-item:hover{ 
+  color: rgba(255, 255, 255, 0.9);
+}
 
-.nav-item.active{
-  background: var(--brand-weak);
-  color: var(--brand);
+.nav-item.active .nav-icon{
+  color: rgba(255,255,255,0.95) !important;
 }
 
 .nav-icon{
   width: 22px;
+  color: rgba(255, 255, 255, 0.75);
   text-align: center;
   font-size: 16px;
   opacity: 0.95;
+}
+
+.nav-icon.fa-regular{
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .nav-label{
@@ -253,10 +293,13 @@ input, button, textarea, select{
 }
 
 .card{
-  background: var(--panel);
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 14px;
+  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), var(--inner-highlight);
+  backdrop-filter: blur(8px);
 }
 
 .card-title{
@@ -287,9 +330,21 @@ input, button, textarea, select{
 .text-input{
   width: 100%;
   padding: 10px 10px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.text-input::placeholder{
+  color: var(--text-muted);
+}
+
+.text-input:focus{
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(45, 125, 255, 0.20);
 }
 
 .grid-2{
@@ -305,13 +360,18 @@ input, button, textarea, select{
 }
 
 .btn-primary{
-  background: var(--brand);
-  border: 1px solid var(--brand);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  border: 1px solid var(--accent);
   color: white;
   padding: 10px 12px;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 600;
+}
+
+.btn-primary:hover{
+  background: linear-gradient(135deg, #2470e8, #2bb8ea);
+  box-shadow: 0 0 16px rgba(45, 125, 255, 0.4);
 }
 
 .btn-primary:disabled{
@@ -320,9 +380,9 @@ input, button, textarea, select{
 }
 
 .btn-secondary{
-  background: var(--hover);
-  border: 1px solid var(--border);
-  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
   padding: 8px 12px;
   border-radius: 10px;
   cursor: pointer;
@@ -331,7 +391,8 @@ input, button, textarea, select{
 }
 
 .btn-secondary:hover{
-  background: #e2e8f0;
+  background: rgba(45, 125, 255, 0.10);
+  box-shadow: 0 0 12px rgba(45, 125, 255, 0.25);
 }
 
 /* Dash DataTable body cells */
@@ -350,39 +411,487 @@ input, button, textarea, select{
   height: 46px;
   padding: 10px 36px 10px 10px; /* left matches inputs, right keeps arrow space */
   border-radius: 12px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   font-size: 14px;
   line-height: normal;
   box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
 }
 
 /* Remove Bootstrap focus glow, keep your clean look */
 .form-select:focus {
-  box-shadow: none;
-  border-color: var(--border);
+  box-shadow: 0 0 0 3px rgba(45, 125, 255, 0.20);
+  border-color: var(--accent);
+  outline: none;
 }
 
 /* ------------------------------------------------------------------
    Status bar (Design page)
    ------------------------------------------------------------------ */
 .status-bar{
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--card);
+  border: 1px solid var(--card-border);
   border-radius: 12px;
   padding: 10px 14px;
   margin-top: 10px;
   font-size: 13px;
-  color: var(--muted);
+  color: var(--text-muted);
+  backdrop-filter: blur(8px);
 }
 
 /* ------------------------------------------------------------------
    Debug panel (Design page)
    ------------------------------------------------------------------ */
 .debug-panel{
-  background: #fef3c7;
-  border: 1px solid #fbbf24;
+  background: rgba(255, 176, 32, 0.15);
+  border: 1px solid var(--warning);
   border-radius: 12px;
   padding: 12px 14px;
   font-size: 13px;
-  color: #78350f;
+  color: var(--warning);
+}
+
+/* ------------------------------------------------------------------
+   Dash DataTable dark theme
+   ------------------------------------------------------------------ */
+.dash-table-container{
+  background: transparent;
+}
+
+.dash-spreadsheet-container{
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.dash-table-container .dash-spreadsheet{
+  background: transparent;
+}
+
+/* Table header */
+.dash-table-container .dash-header{
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text) !important;
+  border-bottom: 1px solid var(--card-border) !important;
+}
+
+.dash-table-container .dash-header .column-header{
+  color: var(--text) !important;
+}
+
+/* Table cells */
+.dash-table-container .dash-cell{
+  background: transparent !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Row hover */
+.dash-table-container tr:hover .dash-cell{
+  background: rgba(45, 125, 255, 0.10) !important;
+}
+
+/* Editable inputs */
+.dash-table-container input{
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+}
+
+.dash-table-container input:focus{
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(45, 125, 255, 0.20) !important;
+}
+
+/* ------------------------------------------------------------------
+   Bootstrap nav pills dark theme
+   ------------------------------------------------------------------ */
+.nav-pills .nav-link{
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 10px;
+  padding: 8px 16px;
+  font-weight: 500;
+}
+
+.nav-pills .nav-link:hover{
+  background: rgba(45, 125, 255, 0.10);
+}
+
+.nav-pills .nav-link.active{
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white;
+  border-color: var(--accent);
+}
+
+/* ------------------------------------------------------------------
+   Bootstrap accordion dark theme
+   ------------------------------------------------------------------ */
+.accordion-item{
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  margin-bottom: 8px;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.accordion-button{
+  background: rgba(45, 125, 255, 0.12);
+  color: var(--text);
+  border: none;
+  padding: 12px 16px;
+  font-weight: 600;
+}
+
+.accordion-button:not(.collapsed){
+  background: rgba(45, 125, 255, 0.18);
+  color: var(--accent);
+  box-shadow: none;
+}
+
+.accordion-button:focus{
+  box-shadow: 0 0 0 3px rgba(45, 125, 255, 0.20);
+  border-color: var(--accent);
+}
+
+.accordion-button::after{
+  filter: brightness(0) invert(1);
+}
+
+.accordion-body{
+  background: transparent;
+  color: var(--text);
+  padding: 14px 16px;
+}
+
+/* ------------------------------------------------------------------
+   Generic form inputs (catch-all for Dash components)
+   ------------------------------------------------------------------ */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+textarea,
+select{
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+textarea:focus,
+select:focus{
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(45, 125, 255, 0.20);
+}
+
+input::placeholder,
+textarea::placeholder{
+  color: var(--text-muted);
+}
+
+/* ============================================================
+   Dash DataTable – Header + checkbox column alignment
+   ============================================================ */
+
+/* --- HEADER: no vertical borders, no top border --- */
+.dash-table-container .dash-header,
+.dash-table-container .dash-header .dash-cell {
+  border-top: none !important;
+  border-left: none !important;
+  border-right: none !important;
+}
+
+/* Keep only a subtle bottom separator (Bootstrap-like) */
+.dash-table-container .dash-header .dash-cell {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14) !important;
+}
+
+/* --- BODY CELLS: no vertical borders --- */
+.dash-table-container .dash-cell {
+  border-left: none !important;
+  border-right: none !important;
+}
+
+/* --- CHECKBOX COLUMN FIX --- */
+
+/* Remove white background from checkbox column */
+.dash-table-container .dash-cell.column-0,
+.dash-table-container .dash-header .dash-cell.column-0 {
+  background: transparent !important;
+}
+
+/* Make checkbox column padding match others */
+.dash-table-container .dash-cell.column-0 {
+  padding-left: 10px !important;
+  padding-right: 10px !important;
+}
+
+/* Ensure checkbox aligns nicely vertically */
+.dash-table-container .dash-cell.column-0 input[type="checkbox"] {
+  margin: 0;
+  vertical-align: middle;
+}
+
+/* Hover must apply to checkbox column as well */
+.dash-table-container .dash-spreadsheet tbody tr:hover{
+  background-color: rgba(64,165,255,0.22) !important;
+}
+
+
+/* Dash DataTable header cells */
+
+.dash-table-container
+  .dash-spreadsheet-container
+  .dash-spreadsheet
+  .dash-header
+  .dash-cell {
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.2px !important;
+    color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Optional: tighten header height slightly */
+.dash-table-container .dash-header .dash-cell {
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+}
+
+/* ============================================================
+   FORCE DataTable header label typography (match nav pills)
+   ============================================================ */
+
+/* Define one shared UI size (optional but clean) */
+:root{
+  --ui-pill-size: 13px;
+  --ui-pill-weight: 600;
+}
+
+/* Your segmented pills should also use this (so both are guaranteed equal) */
+.segmented-pills .nav-link{
+  font-size: var(--ui-pill-size) !important;
+  font-weight: var(--ui-pill-weight) !important;
+}
+
+/* Dash DataTable header: hit ALL possible inner label nodes */
+.dash-table-container .dash-header .dash-cell,
+.dash-table-container .dash-header .dash-cell * ,
+.dash-table-container .dash-header .dash-cell-value,
+.dash-table-container .dash-header .column-header-name{
+  font-size: var(--ui-pill-size) !important;
+  font-weight: var(--ui-pill-weight) !important;
+  letter-spacing: 0.2px !important;
+}
+
+/* ============================================================
+   KPI cards – force readable white text
+   ============================================================ */
+
+/* KPI titles */
+.card .card-title {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* KPI main values (numbers) */
+.card [id^="holdings-kpi-"] {
+  color: #ffffff;
+}
+
+/* KPI helper text */
+.card .hint-text {
+  color: rgba(255, 255, 255, 0.70);
+}
+
+/* ============================================================
+   Segmented nav pills (quiet, modern) – like "Current / Completed"
+   ============================================================ */
+
+.segmented-pills{
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+/* Base pill */
+.segmented-pills .nav-link{
+  border: 0 !important;
+  border-radius: 12px !important;
+  padding: 8px 14px !important;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+  background: transparent !important;
+  color: rgba(255,255,255,0.62) !important;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+/* Hover (quiet) */
+.segmented-pills .nav-link:hover{
+  color: rgba(255,255,255,0.82) !important;
+  background: rgba(255,255,255,0.06) !important;
+}
+
+/* Active pill = filled + subtle glow */
+.segmented-pills .nav-link.active{
+  background: rgba(64,165,255,0.22) !important;     /* calm blue fill */
+  color: rgba(255,255,255,0.95) !important;
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.25),
+    0 0 0 1px rgba(64,165,255,0.35) inset;
+}
+
+/* Keyboard focus */
+.segmented-pills .nav-link:focus{
+  outline: none !important;
+  box-shadow:
+    0 0 0 3px rgba(64,165,255,0.18),
+    0 0 0 1px rgba(255,255,255,0.10) inset;
+}
+
+.card:has(.segmented-pills){
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.segmented-pills{
+  margin: 6px 0 6px 0;   /* top | right | bottom | left */
+}
+
+/* ============================================================
+   Header portfolio selector (final, calm, aligned)
+   ============================================================ */
+
+.page-header-actions{
+  --dd-font: 12.5px;                 /* menu text */
+  --dd-font-control: 13px;           /* selected value */
+  --dd-radius: 10px;
+  --dd-bg: rgba(255,255,255,0.06);
+  --dd-border: rgba(255,255,255,0.14);
+  --dd-border-hover: rgba(255,255,255,0.22);
+  --dd-border-focus: rgba(255,255,255,0.28);
+  --dd-menu-bg: rgba(12,18,34,0.98);
+}
+
+/* ─────────────────────────
+   Control (closed state)
+   ───────────────────────── */
+
+.page-header-actions .Select-control{
+  background: var(--dd-bg) !important;
+  border: 1px solid var(--dd-border) !important;
+  border-radius: var(--dd-radius) !important;
+  min-height: 38px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.page-header-actions .Select-control:hover{
+  border-color: var(--dd-border-hover) !important;
+}
+
+.page-header-actions .is-focused:not(.is-open) > .Select-control{
+  border-color: var(--dd-border-focus) !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.10) !important;
+}
+
+/* ─────────────────────────
+   Selected value / placeholder
+   ───────────────────────── */
+
+.page-header-actions .Select-value{
+  padding-left: 10px;
+}
+
+.page-header-actions .Select-value-label{
+  color: rgba(255,255,255,0.95) !important;
+  font-size: var(--dd-font-control) !important;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.page-header-actions .Select-placeholder{
+  color: rgba(255,255,255,0.75) !important;
+  font-size: var(--dd-font-control) !important;
+  font-weight: 600;
+  padding-left: 10px;
+}
+
+/* Dropdown arrow */
+.page-header-actions .Select-arrow{
+  border-top-color: rgba(255,255,255,0.6) !important;
+}
+
+/* ─────────────────────────
+   Dropdown menu
+   ───────────────────────── */
+
+.page-header-actions .Select-menu-outer{
+  background: var(--dd-menu-bg) !important;
+  border: 1px solid var(--dd-border) !important;
+  border-radius: var(--dd-radius) !important;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+
+/* Menu items – FORCE font size on text nodes */
+.page-header-actions .Select-option,
+.page-header-actions .Select-option *{
+  font-size: var(--dd-font) !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  color: rgba(255,255,255,0.86);
+  padding: 7px 10px;
+}
+
+/* Hover */
+.page-header-actions .Select-option.is-focused{
+  background: rgba(255,255,255,0.08) !important;
+}
+
+/* Selected option */
+.page-header-actions .Select-option.is-selected,
+.page-header-actions .Select-option.is-selected *{
+  background: rgba(255,255,255,0.12) !important;
+  font-weight: 600 !important;
+}
+
+/* ============================================================
+   Page header typography – align with sidebar brand
+   ============================================================ */
+
+/* Page title */
+.page-header h2,
+.page-header .page-title{
+  font-size: 20px !important;          /* same as sidebar brand */
+  font-weight: 600 !important;
+  line-height: 1.25;
+  letter-spacing: 0.2px;
+  margin-bottom: 4px;
+  padding: 10px ;
+  color: rgba(255,255,255,0.95);
+}
+
+/* Page subtitle */
+.page-header .page-subtitle,
+.page-header p{
+  font-size: 12.5px !important;        /* same scale as sidebar subtitle */
+  font-weight: 500;
+  line-height: 1.4;
+  padding-left: 10px;
+  color: rgba(255,255,255,0.65);
 }
