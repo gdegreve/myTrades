@@ -28,6 +28,20 @@ from app.db.policy_repo import load_policy_snapshot
 import plotly.graph_objects as go
 
 
+# Pill styling constants
+PILL_ACTIVE_STYLE = {
+    "backgroundColor": "var(--accent)",
+    "color": "white",
+    "border": "1px solid var(--accent)",
+}
+
+PILL_INACTIVE_STYLE = {
+    "backgroundColor": "transparent",
+    "color": "var(--text)",
+    "border": "1px solid var(--border-strong)",
+}
+
+
 def layout() -> html.Div:
     return html.Div(
         children=[
@@ -37,9 +51,9 @@ def layout() -> html.Div:
                 children=[
                     html.Div(
                         children=[
-                            html.H2("Portfolio – Holdings (Positions & Cash)", style={"margin": "0"}),
+                            html.H2("Portfolio – Holdings", style={"margin": "0"}),
                             html.Div(
-                                "View and manage current positions, cash balance, and transaction history.",
+                                "View and manage positions, cash, and trades.",
                                 className="page-subtitle",
                             ),
                         ]
@@ -75,99 +89,113 @@ def layout() -> html.Div:
                 style={"marginBottom": "14px"},
             ),
 
-            # KPI strip: Total Value, Cash, Invested, P&L
-            html.Div(
-                className="grid-2",
-                style={"marginBottom": "14px"},
-                children=[
-                    # Row 1: Total value + Cash
-                    html.Div(
-                        className="card",
-                        children=[
-                            html.Div("Total Value", className="card-title"),
-                            html.Div(
-                                id="holdings-kpi-total-value",
-                                children="€0.00",
-                                style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
-                            ),
-                            html.Div("Cash + market value", className="hint-text", style={"marginTop": "6px"}),
-                        ],
-                    ),
-                    html.Div(
-                        className="card",
-                        children=[
-                            html.Div("Cash Balance", className="card-title"),
-                            html.Div(
-                                id="holdings-kpi-cash",
-                                children="€0.00",
-                                style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
-                            ),
-                            html.Div("Available for trades", className="hint-text", style={"marginTop": "6px"}),
-                        ],
-                    ),
-                ],
-            ),
-
-            html.Div(
-                className="grid-2",
-                style={"marginBottom": "14px"},
-                children=[
-                    # Row 2: Invested + P&L
-                    html.Div(
-                        className="card",
-                        children=[
-                            html.Div("Invested (Cost Basis)", className="card-title"),
-                            html.Div(
-                                id="holdings-kpi-invested",
-                                children="€0.00",
-                                style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
-                            ),
-                            html.Div("Total capital deployed", className="hint-text", style={"marginTop": "6px"}),
-                        ],
-                    ),
-                    html.Div(
-                        className="card",
-                        children=[
-                            html.Div("Total P&L", className="card-title"),
-                            html.Div(
-                                id="holdings-kpi-pnl",
-                                children="€0.00",
-                                style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
-                            ),
-                            html.Div("Unrealized gain/loss", className="hint-text", style={"marginTop": "6px"}),
-                        ],
-                    ),
-                ],
-            ),
-
-            # Nav pills for Positions / Drift
+            # Nav pills for all 4 tabs - directly under header
             html.Div(
                 className="card",
                 style={"marginBottom": "14px"},
                 children=[
                     dbc.Nav(
                         pills=True,
+                        className="segmented-pills",
                         children=[
                             dbc.NavLink(
                                 "Current Positions",
                                 id="holdings-nav-positions",
                                 active=True,
+                                style=PILL_ACTIVE_STYLE,
                             ),
                             dbc.NavLink(
                                 "Drift",
                                 id="holdings-nav-drift",
                                 active=False,
+                                style=PILL_INACTIVE_STYLE,
+                            ),
+                            dbc.NavLink(
+                                "Cash",
+                                id="holdings-nav-cash",
+                                active=False,
+                                style=PILL_INACTIVE_STYLE,
+                            ),
+                            dbc.NavLink(
+                                "Trades",
+                                id="holdings-nav-trades",
+                                active=False,
+                                style=PILL_INACTIVE_STYLE,
                             ),
                         ],
                     ),
                 ],
             ),
 
-            # Positions panel (visible by default)
+            # =================================================================
+            # PANEL 1: Current Positions (visible by default)
+            # =================================================================
             html.Div(
                 id="holdings-panel-positions",
                 style={"display": "block"},
                 children=[
+                    # KPI strip: Total Value, Cash, Invested, P&L
+                    html.Div(
+                        className="grid-2",
+                        style={"marginBottom": "14px"},
+                        children=[
+                            html.Div(
+                                className="card",
+                                children=[
+                                    html.Div("Total Value", className="card-title"),
+                                    html.Div(
+                                        id="holdings-kpi-total-value",
+                                        children="€0.00",
+                                        style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
+                                    ),
+                                    html.Div("Cash + market value", className="hint-text", style={"marginTop": "6px"}),
+                                ],
+                            ),
+                            html.Div(
+                                className="card",
+                                children=[
+                                    html.Div("Cash Balance", className="card-title"),
+                                    html.Div(
+                                        id="holdings-kpi-cash",
+                                        children="€0.00",
+                                        style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
+                                    ),
+                                    html.Div("Available for trades", className="hint-text", style={"marginTop": "6px"}),
+                                ],
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="grid-2",
+                        style={"marginBottom": "14px"},
+                        children=[
+                            html.Div(
+                                className="card",
+                                children=[
+                                    html.Div("Invested (Cost Basis)", className="card-title"),
+                                    html.Div(
+                                        id="holdings-kpi-invested",
+                                        children="€0.00",
+                                        style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
+                                    ),
+                                    html.Div("Total capital deployed", className="hint-text", style={"marginTop": "6px"}),
+                                ],
+                            ),
+                            html.Div(
+                                className="card",
+                                children=[
+                                    html.Div("Total P&L", className="card-title"),
+                                    html.Div(
+                                        id="holdings-kpi-pnl",
+                                        children="€0.00",
+                                        style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
+                                    ),
+                                    html.Div("Unrealized gain/loss", className="hint-text", style={"marginTop": "6px"}),
+                                ],
+                            ),
+                        ],
+                    ),
+                    # Positions table card
                     html.Div(
                         className="card",
                         children=[
@@ -201,7 +229,9 @@ def layout() -> html.Div:
                 ],
             ),
 
-            # Drift panel (hidden by default)
+            # =================================================================
+            # PANEL 2: Drift (hidden by default)
+            # =================================================================
             html.Div(
                 id="holdings-panel-drift",
                 style={"display": "none"},
@@ -289,15 +319,17 @@ def layout() -> html.Div:
                 ],
             ),
 
-            # Cash transactions and Trade ticket sections in accordion
-            dbc.Accordion(
-                style={"marginTop": "14px"},
-                start_collapsed=False,
+            # =================================================================
+            # PANEL 3: Cash (hidden by default)
+            # =================================================================
+            html.Div(
+                id="holdings-panel-cash",
+                style={"display": "none"},
                 children=[
-                    # Cash transactions section
-                    dbc.AccordionItem(
-                        title="Cash Transactions",
+                    html.Div(
+                        className="card",
                         children=[
+                            html.Div("Add Cash Transaction", className="card-title", style={"marginBottom": "14px"}),
                             html.Div(
                                 className="grid-3",
                                 style={"marginBottom": "14px"},
@@ -334,7 +366,7 @@ def layout() -> html.Div:
                                             dbc.Input(
                                                 id="cash-date",
                                                 type="date",
-                                                value="2026-01-24",
+                                                value="2026-01-25",
                                                 className="text-input",
                                             ),
                                         ]
@@ -370,9 +402,14 @@ def layout() -> html.Div:
                                     ),
                                 ],
                             ),
+                        ],
+                    ),
+                    html.Div(
+                        className="card",
+                        style={"marginTop": "14px"},
+                        children=[
                             html.Div(
                                 className="card-title-row",
-                                style={"marginTop": "18px"},
                                 children=[
                                     html.Div("Recent Cash Transactions", className="card-title"),
                                     html.Div("Last 10 entries", className="hint-text"),
@@ -394,10 +431,20 @@ def layout() -> html.Div:
                             ),
                         ],
                     ),
-                    # Trade ticket section
-                    dbc.AccordionItem(
-                        title="Trade Ticket",
+                ],
+            ),
+
+            # =================================================================
+            # PANEL 4: Trades (hidden by default)
+            # =================================================================
+            html.Div(
+                id="holdings-panel-trades",
+                style={"display": "none"},
+                children=[
+                    html.Div(
+                        className="card",
                         children=[
+                            html.Div("Trade Ticket", className="card-title", style={"marginBottom": "14px"}),
                             html.Div(
                                 className="grid-3",
                                 style={"marginBottom": "14px"},
@@ -477,7 +524,7 @@ def layout() -> html.Div:
                                             dbc.Input(
                                                 id="trade-date",
                                                 type="date",
-                                                value="2026-01-24",
+                                                value="2026-01-25",
                                                 className="text-input",
                                             ),
                                         ]
@@ -513,9 +560,14 @@ def layout() -> html.Div:
                                     ),
                                 ],
                             ),
+                        ],
+                    ),
+                    html.Div(
+                        className="card",
+                        style={"marginTop": "14px"},
+                        children=[
                             html.Div(
                                 className="card-title-row",
-                                style={"marginTop": "18px"},
                                 children=[
                                     html.Div("Recent Trades", className="card-title"),
                                     html.Div("Last 10 transactions", className="hint-text"),
@@ -753,33 +805,27 @@ def populate_portfolio_dropdown(pathname):
     return options, portfolios[0]["id"]
 
 
-# Pill styling constants (aligned with sidebar brand green)
-PILL_ACTIVE_STYLE = {
-    "backgroundColor": "#0ea5a5",
-    "color": "white",
-    "border": "1px solid #0ea5a5",
-}
-
-PILL_INACTIVE_STYLE = {
-    "backgroundColor": "white",
-    "color": "#0ea5a5",
-    "border": "1px solid #0ea5a5",
-}
-
-
 @callback(
     Output("holdings-panel-positions", "style"),
     Output("holdings-panel-drift", "style"),
+    Output("holdings-panel-cash", "style"),
+    Output("holdings-panel-trades", "style"),
     Output("holdings-nav-positions", "active"),
     Output("holdings-nav-drift", "active"),
+    Output("holdings-nav-cash", "active"),
+    Output("holdings-nav-trades", "active"),
     Output("holdings-nav-positions", "style"),
     Output("holdings-nav-drift", "style"),
+    Output("holdings-nav-cash", "style"),
+    Output("holdings-nav-trades", "style"),
     Input("holdings-nav-positions", "n_clicks"),
     Input("holdings-nav-drift", "n_clicks"),
+    Input("holdings-nav-cash", "n_clicks"),
+    Input("holdings-nav-trades", "n_clicks"),
     prevent_initial_call=True,
 )
-def toggle_holdings_panels(positions_clicks, drift_clicks):
-    """Toggle between Positions and Drift panels based on pill clicks."""
+def toggle_holdings_panels(pos_clicks, drift_clicks, cash_clicks, trades_clicks):
+    """Toggle between all 4 panels based on pill clicks."""
     from dash import ctx
 
     if not ctx.triggered:
@@ -787,28 +833,60 @@ def toggle_holdings_panels(positions_clicks, drift_clicks):
 
     button_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
-    if button_id == "holdings-nav-positions":
-        # Show positions panel, hide drift
-        return (
-            {"display": "block"},  # positions panel
-            {"display": "none"},   # drift panel
-            True,                  # positions active
-            False,                 # drift active
-            PILL_ACTIVE_STYLE,     # positions style
-            PILL_INACTIVE_STYLE,   # drift style
-        )
-    elif button_id == "holdings-nav-drift":
-        # Hide positions panel, show drift
-        return (
-            {"display": "none"},   # positions panel
-            {"display": "block"},  # drift panel
-            False,                 # positions active
-            True,                  # drift active
-            PILL_INACTIVE_STYLE,   # positions style
-            PILL_ACTIVE_STYLE,     # drift style
-        )
+    # Default: all hidden, all inactive
+    panel_styles = {
+        "positions": {"display": "none"},
+        "drift": {"display": "none"},
+        "cash": {"display": "none"},
+        "trades": {"display": "none"},
+    }
+    active_states = {
+        "positions": False,
+        "drift": False,
+        "cash": False,
+        "trades": False,
+    }
+    pill_styles = {
+        "positions": PILL_INACTIVE_STYLE,
+        "drift": PILL_INACTIVE_STYLE,
+        "cash": PILL_INACTIVE_STYLE,
+        "trades": PILL_INACTIVE_STYLE,
+    }
 
-    raise PreventUpdate
+    # Determine which tab was clicked
+    if button_id == "holdings-nav-positions":
+        panel_styles["positions"] = {"display": "block"}
+        active_states["positions"] = True
+        pill_styles["positions"] = PILL_ACTIVE_STYLE
+    elif button_id == "holdings-nav-drift":
+        panel_styles["drift"] = {"display": "block"}
+        active_states["drift"] = True
+        pill_styles["drift"] = PILL_ACTIVE_STYLE
+    elif button_id == "holdings-nav-cash":
+        panel_styles["cash"] = {"display": "block"}
+        active_states["cash"] = True
+        pill_styles["cash"] = PILL_ACTIVE_STYLE
+    elif button_id == "holdings-nav-trades":
+        panel_styles["trades"] = {"display": "block"}
+        active_states["trades"] = True
+        pill_styles["trades"] = PILL_ACTIVE_STYLE
+    else:
+        raise PreventUpdate
+
+    return (
+        panel_styles["positions"],
+        panel_styles["drift"],
+        panel_styles["cash"],
+        panel_styles["trades"],
+        active_states["positions"],
+        active_states["drift"],
+        active_states["cash"],
+        active_states["trades"],
+        pill_styles["positions"],
+        pill_styles["drift"],
+        pill_styles["cash"],
+        pill_styles["trades"],
+    )
 
 
 @callback(
@@ -1008,9 +1086,28 @@ def refresh_holdings_data(portfolio_id, refresh_trigger):
             xaxis_title="Drift (%)",
             yaxis=dict(autorange="reversed"),
             showlegend=False,
-            plot_bgcolor="white",
-            paper_bgcolor="white",
+            font=dict(
+                color="rgba(255,255,255,0.9)",
+                size=12,
+            ),
+            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="rgba(0,0,0,0)",
         )
+
+        sector_fig.update_xaxes(
+            showgrid=False,
+            zeroline=True,
+            zerolinecolor="rgba(255,255,255,0.25)",
+            zerolinewidth=1,
+            tickfont=dict(color="rgba(255,255,255,0.8)"),
+            title_font=dict(color="rgba(255,255,255,0.8)")
+        )
+
+        sector_fig.update_yaxes(
+            showgrid=False,
+            tickfont=dict(color="rgba(255,255,255,0.8)")
+        )
+
 
         # Build region drift chart
         if ticker_regions and drift_analysis["region_drift"]:
@@ -1030,9 +1127,28 @@ def refresh_holdings_data(portfolio_id, refresh_trigger):
                 xaxis_title="Drift (%)",
                 yaxis=dict(autorange="reversed"),
                 showlegend=False,
-                plot_bgcolor="white",
-                paper_bgcolor="white",
+                font=dict(
+                color="rgba(255,255,255,0.9)",
+                    size=12,
+                ),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
             )
+
+            region_fig.update_xaxes(
+                showgrid=False,
+                zeroline=True,
+                zerolinecolor="rgba(255,255,255,0.25)",
+                zerolinewidth=1,
+                tickfont=dict(color="rgba(255,255,255,0.8)"),
+                title_font=dict(color="rgba(255,255,255,0.8)")
+            )
+
+            region_fig.update_yaxes(
+                showgrid=False,
+                tickfont=dict(color="rgba(255,255,255,0.8)")
+            )
+
         else:
             region_fig = go.Figure()
             region_fig.add_annotation(
@@ -1046,8 +1162,12 @@ def refresh_holdings_data(portfolio_id, refresh_trigger):
                 height=300,
                 xaxis=dict(visible=False),
                 yaxis=dict(visible=False),
-                plot_bgcolor="white",
-                paper_bgcolor="white",
+                font=dict(
+                color="rgba(255,255,255,0.9)",
+                    size=12,
+                ),
+                plot_bgcolor="rgba(0,0,0,0)",
+                paper_bgcolor="rgba(0,0,0,0)",
             )
 
         # Build drift tables

@@ -8,7 +8,7 @@ NAV = [
     (
         "MENU",
         [
-            ("Dashboard", "/portfolio/overview", "fa-solid fa-grid-2"),
+            ("Dashboard", "/portfolio/overview", "fa-solid fa-house"),
             ("Exchange", "/analytics/fundamentals", "fa-solid fa-right-left"),
             ("Market", "/analytics/technical", "fa-solid fa-chart-line"),
             ("Wallets", "/tools/settings", "fa-solid fa-wallet"),

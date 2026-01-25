@@ -25,7 +25,10 @@ app = Dash(
     __name__,
     suppress_callback_exceptions=True,
     title="MyTrading – Dash",
-    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    external_stylesheets=[
+        dbc.themes.BOOTSTRAP,
+        "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css",
+    ],
 )
 
 app.layout = build_layout()
