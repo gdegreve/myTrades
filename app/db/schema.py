@@ -83,6 +83,30 @@ def ensure_schema() -> None:
             """
         )
 
+        # Price bars table for yfinance cache (daily close prices).
+        # Expandable for timeseries/drift analysis later.
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS price_bars (
+                symbol TEXT NOT NULL,
+                interval TEXT NOT NULL DEFAULT '1d',
+                date TEXT NOT NULL,
+                close REAL NOT NULL,
+                currency TEXT DEFAULT 'EUR',
+                provider TEXT DEFAULT 'yfinance',
+                fetched_at TEXT NOT NULL,
+                UNIQUE(symbol, interval, date)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_price_bars_symbol_interval
+            ON price_bars(symbol, interval);
+            """
+        )
+
         # Stamp schema touch
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         cur.execute(
