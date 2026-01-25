@@ -107,6 +107,48 @@ def ensure_schema() -> None:
             """
         )
 
+        # Strategy definitions table (signal generation strategies)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS strategy_definitions (
+                strategy_key TEXT PRIMARY KEY,
+                name TEXT,
+                description TEXT,
+                params_json TEXT,
+                updated_at TEXT
+            );
+            """
+        )
+
+        # Ticker-to-strategy mapping (which strategy applies to which ticker)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ticker_strategy_map (
+                portfolio_id INTEGER,
+                ticker TEXT,
+                strategy_key TEXT,
+                updated_at TEXT,
+                PRIMARY KEY (portfolio_id, ticker)
+            );
+            """
+        )
+
+        # Signals backlog (historical signals for review)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS signals_backlog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER,
+                ts TEXT,
+                ticker TEXT,
+                strategy_key TEXT,
+                signal TEXT,
+                reason TEXT,
+                meta_json TEXT
+            );
+            """
+        )
+
         # Stamp schema touch
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         cur.execute(
