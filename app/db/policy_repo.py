@@ -19,13 +19,13 @@ def _column_exists(conn, table: str, column: str) -> bool:
 
 
 def load_policy_snapshot(portfolio_id: int) -> dict[str, Any]:
-    """Return a snapshot for the Design page (policy + sector targets + base currency).""
+    """Return a snapshot for the Design page (policy + sector targets + region targets + base currency).""
 
     This function is intentionally read-only and safe to call from callbacks.
     """
     conn = get_connection()
     try:
-        snapshot: dict[str, Any] = {"policy": {}, "sector_targets": [], "base_currency": "EUR"}
+        snapshot: dict[str, Any] = {"policy": {}, "sector_targets": [], "region_targets": [], "base_currency": "EUR"}
 
         # Validate portfolio exists (optional, defensive)
         if _table_exists(conn, "portfolios"):
@@ -98,6 +98,22 @@ def load_policy_snapshot(portfolio_id: int) -> dict[str, Any]:
                 {"sector": s, "target_pct": None, "min_pct": None, "max_pct": None} for s in sectors
             ]
 
+        # Load region targets
+        if _table_exists(conn, "portfolio_region_targets"):
+            rows = conn.execute(
+                """
+                SELECT region_name AS region,
+                       target_pct AS target_pct,
+                       min_pct AS min_pct,
+                       max_pct AS max_pct
+                FROM portfolio_region_targets
+                WHERE portfolio_id=?
+                ORDER BY region_name COLLATE NOCASE
+                """,
+                (portfolio_id,),
+            ).fetchall()
+            snapshot["region_targets"] = [dict(r) for r in rows]
+
         return snapshot
     finally:
         conn.close()
@@ -107,12 +123,15 @@ def save_policy_snapshot(
     portfolio_id: int,
     policy: dict[str, Any],
     sector_targets: list[dict[str, Any]],
+    region_targets: list[dict[str, Any]] | None = None,
 ) -> None:
-    """Save policy + sector targets in a single transaction.
+    """Save policy + sector targets + region targets in a single transaction.
 
     Validation is expected to happen in the callback layer.
     This function trusts input and writes atomically.
     """
+    if region_targets is None:
+        region_targets = []
     conn = get_connection()
     try:
         cur = conn.cursor()
@@ -185,6 +204,30 @@ def save_policy_snapshot(
                     (
                         portfolio_id,
                         target.get("sector"),
+                        target.get("target_pct"),
+                        target.get("min_pct"),
+                        target.get("max_pct"),
+                    ),
+                )
+
+        # Clear existing region targets
+        cur.execute(
+            "DELETE FROM portfolio_region_targets WHERE portfolio_id=?",
+            (portfolio_id,),
+        )
+
+        # Insert new region targets
+        if _table_exists(conn, "portfolio_region_targets"):
+            for target in region_targets:
+                cur.execute(
+                    """
+                    INSERT INTO portfolio_region_targets
+                        (portfolio_id, region_name, target_pct, min_pct, max_pct)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        portfolio_id,
+                        target.get("region"),
                         target.get("target_pct"),
                         target.get("min_pct"),
                         target.get("max_pct"),
