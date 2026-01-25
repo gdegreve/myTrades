@@ -93,6 +93,35 @@ def get_ticker_sectors(portfolio_id: int) -> dict[str, str]:
         return {row["ticker"]: row["sector"] for row in cur.fetchall()}
 
 
+def get_ticker_regions(portfolio_id: int) -> dict[str, str]:
+    """Return region mapping for all tickers in portfolio transactions.
+
+    Returns dict of {ticker: region_name}, empty string if region not found.
+    Used for drift analysis and data completeness checks.
+    """
+    with get_connection() as conn:
+        # Check if ticker_regions table exists
+        table_check = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='ticker_regions'"
+        ).fetchone()
+
+        if not table_check:
+            # Return empty dict if table doesn't exist yet
+            return {}
+
+        cur = conn.execute(
+            """
+            SELECT DISTINCT t.ticker, COALESCE(tr.region, '') as region
+            FROM transactions t
+            LEFT JOIN ticker_regions tr ON t.ticker = tr.ticker
+            WHERE t.portfolio_id = ?
+            ORDER BY t.ticker
+            """,
+            (portfolio_id,),
+        )
+        return {row["ticker"]: row["region"] for row in cur.fetchall()}
+
+
 def insert_cash_transaction(
     portfolio_id: int,
     cash_type: str,
