@@ -22,6 +22,7 @@ from app.domain.ledger import (
     validate_cash_transaction,
     validate_trade,
 )
+from app.services.market_data import get_latest_daily_closes_cached
 
 
 def layout() -> html.Div:
@@ -86,7 +87,7 @@ def layout() -> html.Div:
                                 children="€0.00",
                                 style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
                             ),
-                            html.Div("Requires market prices", className="hint-text", style={"marginTop": "6px"}),
+                            html.Div("Cash + market value", className="hint-text", style={"marginTop": "6px"}),
                         ],
                     ),
                     html.Div(
@@ -130,7 +131,7 @@ def layout() -> html.Div:
                                 children="€0.00",
                                 style={"fontSize": "24px", "fontWeight": "700", "marginTop": "4px"},
                             ),
-                            html.Div("Requires market prices", className="hint-text", style={"marginTop": "6px"}),
+                            html.Div("Unrealized gain/loss", className="hint-text", style={"marginTop": "6px"}),
                         ],
                     ),
                 ],
@@ -474,6 +475,28 @@ def refresh_holdings_data(portfolio_id, refresh_trigger):
     invested_amount = compute_invested_amount(positions)
     completeness = check_data_completeness(positions, ticker_sectors)
 
+    # Fetch latest daily close prices for all position tickers
+    position_tickers = [p["ticker"] for p in positions]
+    prices, missing_tickers = get_latest_daily_closes_cached(
+        position_tickers,
+        max_age_minutes=60,
+        force_refresh=False,
+    )
+
+    # Compute market values and unrealized P&L
+    market_value_total = 0.0
+    for p in positions:
+        ticker = p["ticker"]
+        if ticker in prices:
+            market_value = p["shares"] * prices[ticker]
+            market_value_total += market_value
+
+    # Total portfolio value = cash + market value of holdings
+    total_value = cash_balance + market_value_total
+
+    # Total P&L = market value - invested amount (unrealized)
+    total_pnl = market_value_total - invested_amount
+
     # Transform positions for display
     positions_data = [
         {
@@ -513,15 +536,31 @@ def refresh_holdings_data(portfolio_id, refresh_trigger):
     # Format KPIs
     cash_str = f"€{cash_balance:,.2f}"
     invested_str = f"€{invested_amount:,.2f}"
-    total_value_str = "€0.00 (requires prices)"
-    pnl_str = "€0.00 (requires prices)"
+
+    # Format Total Value and P&L with partial indicator if prices missing
+    if missing_tickers:
+        partial_suffix = f" (partial: {len(missing_tickers)} missing)"
+        total_value_str = f"€{total_value:,.2f}{partial_suffix}"
+        pnl_str = f"€{total_pnl:,.2f}{partial_suffix}"
+    else:
+        total_value_str = f"€{total_value:,.2f}"
+        pnl_str = f"€{total_pnl:,.2f}"
 
     # Data completeness indicator
     completeness_msg = ""
+    warnings = []
+
     if completeness["missing_sectors"] > 0:
         tickers = ", ".join(completeness["missing_sectors_tickers"])
+        warnings.append(f"{completeness['missing_sectors']} ticker(s) missing sector: {tickers}")
+
+    if missing_tickers:
+        missing_str = ", ".join(missing_tickers)
+        warnings.append(f"{len(missing_tickers)} ticker(s) missing prices: {missing_str}")
+
+    if warnings:
         completeness_msg = html.Div(
-            f"Data: {completeness['missing_sectors']} ticker(s) missing sector: {tickers}",
+            " | ".join(warnings),
             style={"color": "#856404", "backgroundColor": "#fff3cd", "padding": "6px 10px", "borderRadius": "4px", "fontSize": "13px"},
         )
 
