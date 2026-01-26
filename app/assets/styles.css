@@ -355,23 +355,27 @@ input, button, textarea, select{
 
 .grid-3{
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 3fr 1fr;
   gap: 14px;
 }
 
 .btn-primary{
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  /* background: linear-gradient(135deg, var(--accent), var(--accent-2)); */
+  background-color: #2f6fbf;  /* calmer blue */
+  border-color: #2f6fbf;  
   border: 1px solid var(--accent);
   color: white;
-  padding: 10px 12px;
+  padding: 0px 18px;
   border-radius: 12px;
   cursor: pointer;
+  font-size: 14px;
   font-weight: 600;
+  height: 38px;
 }
 
 .btn-primary:hover{
-  background: linear-gradient(135deg, #2470e8, #2bb8ea);
-  box-shadow: 0 0 16px rgba(45, 125, 255, 0.4);
+  background-color: #356fd1;
+  border-color: #356fd1;
 }
 
 .btn-primary:disabled{
@@ -894,4 +898,287 @@ textarea::placeholder{
   line-height: 1.4;
   padding-left: 10px;
   color: rgba(255,255,255,0.65);
+}
+
+/* ===========================
+   Dropdown styling (scoped)
+   Apply className="dd-blend" on dcc.Dropdown
+   =========================== */
+
+.dd-blend {
+  font-size: 14px; /* match header selector feel */
+}
+
+/* control */
+.dd-blend .Select-control,
+.dd-blend .select__control {
+  background: rgba(255,255,255,0.03) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  border-radius: 10px !important;
+  min-height: 38px !important;
+  height: 38px !important;
+  box-shadow: none !important;
+}
+
+/* value + placeholder */
+.dd-blend .Select-placeholder,
+.dd-blend .select__placeholder {
+  color: rgba(230, 235, 245, 0.65) !important;
+}
+
+.dd-blend .Select-value-label,
+.dd-blend .select__single-value {
+  color: rgba(230, 235, 245, 0.92) !important;
+}
+
+/* input text */
+.dd-blend .Select-input > input,
+.dd-blend .select__input input {
+  color: rgba(230, 235, 245, 0.92) !important;
+}
+
+/* arrow + clear indicator */
+.dd-blend .Select-arrow,
+.dd-blend .select__indicator {
+  color: rgba(230, 235, 245, 0.65) !important;
+}
+
+.dd-blend .Select-clear,
+.dd-blend .select__clear-indicator {
+  color: rgba(230, 235, 245, 0.45) !important;
+}
+
+/* hover */
+.dd-blend .Select-control:hover,
+.dd-blend .select__control:hover {
+  border-color: rgba(255,255,255,0.20) !important;
+}
+
+/* focus (subtle) */
+.dd-blend.is-focused .Select-control,
+.dd-blend .select__control--is-focused {
+  border-color: rgba(255,255,255,0.24) !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.06) !important;
+}
+
+/* menu */
+.dd-blend .Select-menu-outer,
+.dd-blend .select__menu {
+  background: rgba(12, 18, 32, 0.98) !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  border-radius: 10px !important;
+  overflow: hidden;
+  z-index: 9999;
+}
+
+/* option */
+.dd-blend .Select-option,
+.dd-blend .select__option {
+  background: transparent !important;
+  color: rgba(230, 235, 245, 0.92) !important;
+  font-size: 14px;
+}
+
+.dd-blend .Select-option.is-focused,
+.dd-blend .select__option--is-focused {
+  background: rgba(255,255,255,0.06) !important;
+}
+
+.dd-blend .Select-option.is-selected,
+.dd-blend .select__option--is-selected {
+  background: rgba(255,255,255,0.08) !important;
+}
+
+/* Selected value */
+.dd-blend .Select-value-label,
+.dd-blend .select__single-value {
+  color: rgba(235, 240, 250, 0.95) !important; /* clear white */
+  font-weight: 500;
+}
+
+/* Placeholder text */
+.dd-blend .Select-placeholder,
+.dd-blend .select__placeholder {
+  color: rgba(235, 240, 250, 0.60) !important;
+}
+
+/* Typed input text (when searchable) */
+.dd-blend .Select-input > input,
+.dd-blend .select__input input {
+  color: rgba(235, 240, 250, 0.95) !important;
+}
+
+/* --- Fix dropdown menu being clipped/behind other cards --- */
+.dd-blend {
+  position: relative;
+  z-index: 50;
+}
+
+/* make sure the menu itself is on top */
+.dd-blend .Select-menu-outer,
+.dd-blend .select__menu {
+  z-index: 9999 !important;
+}
+
+/* allow dropdown menus to escape card boundaries */
+.card,
+.card-body {
+  overflow: visible !important;
+}
+
+/* --- Force dropdown text colors (selected/placeholder/menu) --- */
+.dd-blend .Select-value-label,
+.dd-blend .Select-value-label span,
+.dd-blend .select__single-value,
+.dd-blend .select__single-value span {
+  color: #eef2ff !important;
+}
+
+.dd-blend .Select-placeholder,
+.dd-blend .select__placeholder {
+  color: rgba(238, 242, 255, 0.65) !important;
+}
+
+.dd-blend .Select-option,
+.dd-blend .select__option {
+  color: #eef2ff !important;
+}
+
+.grid-3 {
+  position: relative;
+  overflow: visible !important;
+  z-index: 1; /* base stacking context */
+}
+
+/* make the dropdown wrapper itself a top stacking context */
+.grid-3 .dd-blend {
+  position: relative;
+  z-index: 10000;
+}
+
+/* react-select containers (older + newer classnames) */
+.grid-3 .dd-blend .Select,
+.grid-3 .dd-blend .select__control {
+  position: relative;
+  z-index: 10001;
+}
+
+/* the dropdown menu must be the highest */
+.grid-3 .dd-blend .Select-menu-outer,
+.grid-3 .dd-blend .select__menu {
+  position: absolute;
+  z-index: 10002 !important;
+}
+
+/* ===== Signals / Manage strategies: dropdown must overlay cards below ===== */
+
+/* Make the cards participate in z-index ordering (needed because backdrop-filter creates stacking contexts) */
+#signals-panel-manage .card {
+  position: relative;
+  z-index: 1;
+  overflow: visible; /* allow dropdown to escape */
+}
+
+/* The assign card must be above the others */
+#signals-panel-manage .signals-assign-card {
+  z-index: 50;
+}
+
+/* Ensure the dropdown menu itself is on top (old + new classnames) */
+#signals-panel-manage .signals-assign-card .dd-blend .Select-menu-outer,
+#signals-panel-manage .signals-assign-card .dd-blend .select__menu {
+  z-index: 99999 !important;
+}
+
+/* ===============================
+   Dropdown menu background match
+   =============================== */
+
+/* Match portfolio dropdown background */
+.dd-blend .Select-menu-outer,
+.dd-blend .select__menu {
+  background: linear-gradient(
+    180deg,
+    rgba(18, 28, 52, 0.98),
+    rgba(12, 20, 40, 0.98)
+  ) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 10px !important;
+}
+
+/* Option hover / active states (subtle, not blue-white) */
+.dd-blend .Select-option.is-focused,
+.dd-blend .select__option--is-focused {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+.dd-blend .Select-option.is-selected,
+.dd-blend .select__option--is-selected {
+  background: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* =========================================
+   FORCE dropdown selected value to white
+   (React-Select is annoyingly nested)
+   ========================================= */
+
+/* Force selected dropdown text to white (scoped) */
+.dd-blend .Select-value-label,
+.dd-blend .Select-value-label span,
+.dd-blend .select__single-value,
+.dd-blend .select__single-value span,
+.dd-blend .Select-input > input,
+.dd-blend .select__input input {
+  color: #fff !important;
+}
+
+/* Placeholder (keep slightly muted) */
+.dd-blend .Select-placeholder,
+.dd-blend .select__placeholder {
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+
+/* Typed text when searchable */
+.dd-blend .Select-input input,
+.dd-blend .select__input input {
+  color: #ffffff !important;
+}
+
+/* ============================================================
+   FINAL OVERRIDE — dd-blend text MUST be white
+   Scoped to Signals assign card
+   ============================================================ */
+
+.signals-assign-card .dd-blend *,
+.signals-assign-card .dd-blend .Select-value-label,
+.signals-assign-card .dd-blend .Select-value-label span,
+.signals-assign-card .dd-blend .select__single-value,
+.signals-assign-card .dd-blend .select__single-value span,
+.signals-assign-card .dd-blend .Select-input input,
+.signals-assign-card .dd-blend .select__input input {
+  color: #ffffff !important;
+}
+
+/* Backlog filters: allow dropdown menus to overlay following cards */
+#signals-panel-backlog .signals-filters-card {
+  position: relative;
+  z-index: 50;
+  overflow: visible !important;
+}
+
+/* Ensure menu is above other cards */
+#signals-panel-backlog .signals-filters-card .dd-blend .Select-menu-outer,
+#signals-panel-backlog .signals-filters-card .dd-blend .select__menu {
+  z-index: 99999 !important;
+}
+
+/* Make dd-blend text white in backlog filters too */
+#signals-panel-backlog .signals-filters-card .dd-blend *,
+#signals-panel-backlog .signals-filters-card .dd-blend .Select-value-label,
+#signals-panel-backlog .signals-filters-card .dd-blend .Select-value-label span,
+#signals-panel-backlog .signals-filters-card .dd-blend .select__single-value,
+#signals-panel-backlog .signals-filters-card .dd-blend .select__single-value span,
+#signals-panel-backlog .signals-filters-card .dd-blend .Select-input input,
+#signals-panel-backlog .signals-filters-card .dd-blend .select__input input {
+  color: #ffffff !important;
 }

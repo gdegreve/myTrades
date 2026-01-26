@@ -169,7 +169,7 @@ def layout() -> html.Div:
                 children=[
                     # Strategy assignment card
                     html.Div(
-                        className="card",
+                        className="card signals-assign-card",
                         style={"marginBottom": "14px"},
                         children=[
                             html.Div("Assign Strategy to Ticker", className="card-title", style={"marginBottom": "14px"}),
@@ -182,6 +182,7 @@ def layout() -> html.Div:
                                             html.Div("Ticker", className="field-label"),
                                             dcc.Dropdown(
                                                 id="strategy-assign-ticker",
+                                                className="dd-blend",
                                                 options=[],
                                                 placeholder="Select ticker",
                                                 clearable=False,
@@ -193,6 +194,7 @@ def layout() -> html.Div:
                                             html.Div("Strategy", className="field-label"),
                                             dcc.Dropdown(
                                                 id="strategy-assign-strategy",
+                                                className="dd-blend",
                                                 options=[],
                                                 placeholder="Select strategy",
                                                 clearable=False,
@@ -216,19 +218,12 @@ def layout() -> html.Div:
                         ],
                     ),
 
-                    # Strategy preview card
-                    html.Div(
-                        className="card",
-                        style={"marginBottom": "14px"},
-                        children=[
-                            html.Div("Strategy Preview", className="card-title", style={"marginBottom": "10px"}),
-                            html.Div(id="strategy-preview-content", children="Select a strategy to view details"),
-                        ],
-                    ),
+                    
 
                     # Current assignments table
                     html.Div(
                         className="card",
+                        style={"marginBottom": "14px"},
                         children=[
                             html.Div(
                                 className="card-title-row",
@@ -252,6 +247,17 @@ def layout() -> html.Div:
                             ),
                         ],
                     ),
+
+                    # Strategy preview card
+                    html.Div(
+                        className="card",
+                        
+                        children=[
+                            html.Div("Strategy Preview", className="card-title", style={"marginBottom": "10px"}),
+                            html.Div(id="strategy-preview-content", children="Select a strategy to view details"),
+                        ],
+                    ),
+
                 ],
             ),
 
@@ -264,7 +270,7 @@ def layout() -> html.Div:
                 children=[
                     # Filters card
                     html.Div(
-                        className="card",
+                        className="card signals-filters-card",
                         style={"marginBottom": "14px"},
                         children=[
                             html.Div("Filters", className="card-title", style={"marginBottom": "14px"}),
@@ -276,6 +282,7 @@ def layout() -> html.Div:
                                             html.Div("Ticker", className="field-label"),
                                             dcc.Dropdown(
                                                 id="backlog-filter-ticker",
+                                                className="dd-blend",
                                                 options=[{"label": "All", "value": "all"}],
                                                 value="all",
                                                 clearable=False,
@@ -287,6 +294,7 @@ def layout() -> html.Div:
                                             html.Div("Strategy", className="field-label"),
                                             dcc.Dropdown(
                                                 id="backlog-filter-strategy",
+                                                className="dd-blend",
                                                 options=[{"label": "All", "value": "all"}],
                                                 value="all",
                                                 clearable=False,
@@ -298,6 +306,7 @@ def layout() -> html.Div:
                                             html.Div("Signal", className="field-label"),
                                             dcc.Dropdown(
                                                 id="backlog-filter-signal",
+                                                className="dd-blend",
                                                 options=[
                                                     {"label": "All", "value": "all"},
                                                     {"label": "BUY", "value": "BUY"},
