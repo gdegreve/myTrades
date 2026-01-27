@@ -9,12 +9,12 @@ from __future__ import annotations
 from typing import Any
 
 
-def compute_cash_balance(cash_movements: list[dict[str, Any]], trades: list[dict[str, Any]]) -> float:
+def compute_cash_balance(cash_movements: list[dict[str, Any]], trades: list[dict[str, Any]] | None = None) -> float:
     """Compute current cash balance from ledger entries.
 
     Args:
         cash_movements: List of cash deposits/withdrawals with cash_type and amount_eur
-        trades: List of stock trades with transaction_type, shares, price_eur, commission
+        trades: DEPRECATED - kept for backward compatibility but ignored
 
     Returns:
         Net cash balance in EUR
@@ -23,28 +23,16 @@ def compute_cash_balance(cash_movements: list[dict[str, Any]], trades: list[dict
         - Start with 0
         - Add all 'credit' (deposits)
         - Subtract all 'debit' (withdrawals)
-        - Subtract cash used in 'buy' trades (shares * price_eur + commission)
-        - Add cash received from 'sell' trades (shares * price_eur - commission)
+        - Trade cash impact is handled via automatic cash_transactions entries
     """
     balance = 0.0
 
-    # Process cash movements
+    # Process cash movements only
     for movement in cash_movements:
         if movement["cash_type"] == "credit":
             balance += movement["amount_eur"]
         elif movement["cash_type"] == "debit":
             balance -= movement["amount_eur"]
-
-    # Process trades (cash impact)
-    for trade in trades:
-        price_eur = trade.get("price_eur") or 0.0
-        shares = trade.get("shares") or 0.0
-        commission = trade.get("commission") or 0.0
-
-        if trade["transaction_type"] == "buy":
-            balance -= (shares * price_eur + commission)
-        elif trade["transaction_type"] == "sell":
-            balance += (shares * price_eur - commission)
 
     return balance
 

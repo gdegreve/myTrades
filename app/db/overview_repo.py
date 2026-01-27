@@ -20,9 +20,16 @@ def get_portfolio_summary(portfolio_id: int) -> dict[str, Any]:
         dict with keys: cash_balance, benchmark_ticker, total_invested
     """
     with get_connection() as conn:
-        # Get cash balance from portfolios table
+        # Compute cash balance from cash_transactions ledger
         cur = conn.execute(
-            "SELECT cash_balance FROM portfolios WHERE id = ?",
+            """
+            SELECT COALESCE(
+                SUM(CASE WHEN cash_type = 'credit' THEN amount_eur ELSE -amount_eur END),
+                0
+            ) as cash_balance
+            FROM cash_transactions
+            WHERE portfolio_id = ?
+            """,
             (portfolio_id,),
         )
         row = cur.fetchone()
@@ -275,9 +282,15 @@ def get_all_portfolios_summary() -> dict[str, Any]:
         dict with keys: total_cash_balance, total_invested
     """
     with get_connection() as conn:
-        # Get total cash balance across all portfolios
+        # Compute total cash balance from cash_transactions ledger
         cur = conn.execute(
-            "SELECT COALESCE(SUM(cash_balance), 0) as total_cash FROM portfolios"
+            """
+            SELECT COALESCE(
+                SUM(CASE WHEN cash_type = 'credit' THEN amount_eur ELSE -amount_eur END),
+                0
+            ) as total_cash
+            FROM cash_transactions
+            """
         )
         row = cur.fetchone()
         total_cash_balance = row["total_cash"] if row else 0.0
