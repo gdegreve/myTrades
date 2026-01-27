@@ -59,6 +59,25 @@ def layout() -> html.Div:
                             ),
                         ]
                     ),
+                    html.Div(
+                        id="overview-dropdown-container",
+                        className="page-header-actions",
+                        style={"display": "none"},
+                        children=[
+                            html.Div(
+                                children=[
+                                    html.Div("Portfolio", className="field-label"),
+                                    dcc.Dropdown(
+                                        id="overview-portfolio",
+                                        options=[],
+                                        value=None,
+                                        clearable=False,
+                                        style={"minWidth": "220px"},
+                                    ),
+                                ]
+                            ),
+                        ],
+                    ),
                 ],
             ),
 
@@ -313,26 +332,6 @@ def layout() -> html.Div:
                 id="overview-panel-breakdown",
                 style={"display": "none"},
                 children=[
-                    # Portfolio selector
-                    html.Div(
-                        className="card",
-                        style={"marginBottom": "14px"},
-                        children=[
-                            html.Div(
-                                children=[
-                                    html.Div("Portfolio", className="field-label"),
-                                    dcc.Dropdown(
-                                        id="overview-portfolio",
-                                        options=[],
-                                        value=None,
-                                        clearable=False,
-                                        style={"minWidth": "220px"},
-                                    ),
-                                ]
-                            ),
-                        ],
-                    ),
-
                     # Warning banner for insufficient data
                     html.Div(id="overview-data-warning", style={"marginBottom": "14px"}),
 
@@ -608,6 +607,7 @@ def populate_portfolio_dropdown(pathname):
     Output("overview-nav-breakdown", "active"),
     Output("overview-nav-overview", "style"),
     Output("overview-nav-breakdown", "style"),
+    Output("overview-dropdown-container", "style"),
     Input("overview-nav-overview", "n_clicks"),
     Input("overview-nav-breakdown", "n_clicks"),
     prevent_initial_call=True,
@@ -634,6 +634,7 @@ def toggle_overview_panels(overview_clicks, breakdown_clicks):
         "overview": PILL_INACTIVE_STYLE,
         "breakdown": PILL_INACTIVE_STYLE,
     }
+    dropdown_style = {"display": "none"}
 
     # Determine which tab was clicked
     if button_id == "overview-nav-overview":
@@ -644,6 +645,7 @@ def toggle_overview_panels(overview_clicks, breakdown_clicks):
         panel_styles["breakdown"] = {"display": "block"}
         active_states["breakdown"] = True
         pill_styles["breakdown"] = PILL_ACTIVE_STYLE
+        dropdown_style = {"display": "block"}
     else:
         raise PreventUpdate
 
@@ -654,6 +656,7 @@ def toggle_overview_panels(overview_clicks, breakdown_clicks):
         active_states["breakdown"],
         pill_styles["overview"],
         pill_styles["breakdown"],
+        dropdown_style,
     )
 
 
