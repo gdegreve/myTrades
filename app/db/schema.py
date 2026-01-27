@@ -149,6 +149,64 @@ def ensure_schema() -> None:
             """
         )
 
+        # Benchmarks table (for Portfolio Overview comparisons)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS benchmarks (
+                benchmark_id INTEGER PRIMARY KEY,
+                code TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                base_currency TEXT NOT NULL DEFAULT 'EUR',
+                description TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            """
+        )
+
+        # Benchmark constituents (tickers and weights)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS benchmark_tickers (
+                benchmark_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                weight REAL,
+                added_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (benchmark_id, ticker),
+                FOREIGN KEY (benchmark_id) REFERENCES benchmarks(benchmark_id)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_benchmark_tickers_ticker
+            ON benchmark_tickers(ticker);
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_benchmark_tickers_benchmark_id
+            ON benchmark_tickers(benchmark_id);
+            """
+        )
+
+        # Seed benchmark data (idempotent)
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO benchmarks (code, name, base_currency)
+            VALUES ('SP500', 'S&P 500', 'USD');
+            """
+        )
+
+        cur.execute(
+            """
+            INSERT OR IGNORE INTO benchmarks (code, name, base_currency)
+            VALUES ('STOXX600', 'STOXX Europe 600', 'EUR');
+            """
+        )
+
         # Stamp schema touch
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         cur.execute(

@@ -266,3 +266,222 @@ def get_price_data_coverage() -> int:
         )
         row = cur.fetchone()
         return row["count"] if row else 0
+
+
+def get_all_portfolios_summary() -> dict[str, Any]:
+    """Get aggregated summary data across ALL portfolios.
+
+    Returns:
+        dict with keys: total_cash_balance, total_invested
+    """
+    with get_connection() as conn:
+        # Get total cash balance across all portfolios
+        cur = conn.execute(
+            "SELECT COALESCE(SUM(cash_balance), 0) as total_cash FROM portfolios"
+        )
+        row = cur.fetchone()
+        total_cash_balance = row["total_cash"] if row else 0.0
+
+        # Get total invested across all portfolios
+        cur = conn.execute(
+            """
+            SELECT
+                COALESCE(SUM(CASE WHEN transaction_type = 'buy' THEN shares * price_eur ELSE 0 END), 0) -
+                COALESCE(SUM(CASE WHEN transaction_type = 'sell' THEN shares * price_eur ELSE 0 END), 0) as total_invested
+            FROM transactions
+            """
+        )
+        row = cur.fetchone()
+        total_invested = row["total_invested"] if row else 0.0
+
+        return {
+            "total_cash_balance": total_cash_balance,
+            "total_invested": total_invested,
+        }
+
+
+def get_all_current_positions() -> list[dict[str, Any]]:
+    """Get current positions aggregated across ALL portfolios.
+
+    Returns list of dicts with: portfolio_id, ticker, shares, avg_cost, cost_basis
+    """
+    with get_connection() as conn:
+        cur = conn.execute(
+            """
+            SELECT
+                portfolio_id,
+                ticker,
+                SUM(CASE WHEN transaction_type = 'buy' THEN shares ELSE -shares END) as shares,
+                SUM(CASE WHEN transaction_type = 'buy' THEN shares * price_eur ELSE 0 END) as total_buy_cost,
+                SUM(CASE WHEN transaction_type = 'buy' THEN shares ELSE 0 END) as total_buy_shares
+            FROM transactions
+            GROUP BY portfolio_id, ticker
+            HAVING shares > 0.0001
+            """
+        )
+        rows = cur.fetchall()
+
+        positions = []
+        for row in rows:
+            shares = row["shares"]
+            total_buy_cost = row["total_buy_cost"] or 0.0
+            total_buy_shares = row["total_buy_shares"] or 0.0
+            avg_cost = total_buy_cost / total_buy_shares if total_buy_shares > 0 else 0.0
+            cost_basis = shares * avg_cost
+
+            positions.append({
+                "portfolio_id": row["portfolio_id"],
+                "ticker": row["ticker"],
+                "shares": shares,
+                "avg_cost": avg_cost,
+                "cost_basis": cost_basis,
+            })
+
+        return positions
+
+
+def get_daily_cashflows(portfolio_id: int | None = None) -> dict[str, float]:
+    """Get net cashflows per date for TWR calculation.
+
+    Cashflows = buy trades add cash outflow (negative), sell trades add cash inflow (positive).
+    Also includes cash_transactions (deposits/withdrawals).
+
+    Args:
+        portfolio_id: Optional portfolio ID. If None, aggregates across all portfolios.
+
+    Returns:
+        Dict of {date: net_cashflow_eur} where positive = inflow, negative = outflow.
+    """
+    with get_connection() as conn:
+        # Trade cashflows: buys are outflows (-), sells are inflows (+)
+        if portfolio_id is not None:
+            cur = conn.execute(
+                """
+                SELECT
+                    transaction_date as date,
+                    SUM(CASE
+                        WHEN transaction_type = 'buy' THEN -shares * price_eur
+                        ELSE shares * price_eur
+                    END) as net_cf
+                FROM transactions
+                WHERE portfolio_id = ?
+                GROUP BY transaction_date
+                """,
+                (portfolio_id,),
+            )
+        else:
+            cur = conn.execute(
+                """
+                SELECT
+                    transaction_date as date,
+                    SUM(CASE
+                        WHEN transaction_type = 'buy' THEN -shares * price_eur
+                        ELSE shares * price_eur
+                    END) as net_cf
+                FROM transactions
+                GROUP BY transaction_date
+                """
+            )
+
+        trade_flows = {row["date"]: row["net_cf"] for row in cur.fetchall()}
+
+        # Cash transaction cashflows: deposits are inflows (+), debits are outflows (-)
+        if portfolio_id is not None:
+            cur = conn.execute(
+                """
+                SELECT
+                    transaction_date as date,
+                    SUM(CASE
+                        WHEN cash_type = 'credit' THEN amount_eur
+                        ELSE -amount_eur
+                    END) as net_cf
+                FROM cash_transactions
+                WHERE portfolio_id = ?
+                GROUP BY transaction_date
+                """,
+                (portfolio_id,),
+            )
+        else:
+            cur = conn.execute(
+                """
+                SELECT
+                    transaction_date as date,
+                    SUM(CASE
+                        WHEN cash_type = 'credit' THEN amount_eur
+                        ELSE -amount_eur
+                    END) as net_cf
+                FROM cash_transactions
+                GROUP BY transaction_date
+                """
+            )
+
+        cash_flows = {row["date"]: row["net_cf"] for row in cur.fetchall()}
+
+        # Merge: combine trade and cash flows by date
+        all_dates = set(trade_flows.keys()) | set(cash_flows.keys())
+        result = {}
+        for date in all_dates:
+            result[date] = trade_flows.get(date, 0.0) + cash_flows.get(date, 0.0)
+
+        return result
+
+
+def get_all_sector_allocations(position_values: dict[str, float]) -> list[dict[str, Any]]:
+    """Get sector allocations for aggregated positions across all portfolios.
+
+    Args:
+        position_values: Dict of {ticker: market_value}
+
+    Returns:
+        List of dicts with: sector, value, percentage
+    """
+    if not position_values:
+        return []
+
+    total_value = sum(position_values.values())
+    if total_value == 0:
+        return []
+
+    with get_connection() as conn:
+        tickers = list(position_values.keys())
+        placeholders = ",".join("?" for _ in tickers)
+        cur = conn.execute(
+            f"""
+            SELECT ticker, sector
+            FROM ticker_sectors
+            WHERE ticker IN ({placeholders})
+            """,
+            tickers,
+        )
+        ticker_to_sector = {row["ticker"]: row["sector"] for row in cur.fetchall()}
+
+    # Aggregate by sector
+    sector_values: dict[str, float] = {}
+    for ticker, value in position_values.items():
+        sector = ticker_to_sector.get(ticker, "Other")
+        sector_values[sector] = sector_values.get(sector, 0.0) + value
+
+    # Sort by value descending, keep top 8 + Other
+    sorted_sectors = sorted(sector_values.items(), key=lambda x: x[1], reverse=True)
+
+    result = []
+    other_value = 0.0
+
+    for i, (sector, value) in enumerate(sorted_sectors):
+        if i < 8 and sector != "Other":
+            result.append({
+                "sector": sector,
+                "value": value,
+                "percentage": (value / total_value) * 100,
+            })
+        else:
+            other_value += value
+
+    if other_value > 0:
+        result.append({
+            "sector": "Other",
+            "value": other_value,
+            "percentage": (other_value / total_value) * 100,
+        })
+
+    return result
