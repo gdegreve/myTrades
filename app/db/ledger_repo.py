@@ -170,6 +170,10 @@ def insert_trade(
 ) -> None:
     """Insert a trade transaction into the ledger.
 
+    Automatically creates corresponding cash transaction entry:
+    - BUY: creates debit (withdrawal)
+    - SELL: creates credit (deposit)
+
     Args:
         portfolio_id: Portfolio ID
         ticker: Stock ticker symbol
@@ -185,6 +189,7 @@ def insert_trade(
     """
     conn = get_connection()
     try:
+        # Insert trade
         conn.execute(
             """
             INSERT INTO transactions (
@@ -212,6 +217,42 @@ def insert_trade(
                 notes,
             ),
         )
+
+        # Create automatic cash entry
+        ticker_upper = ticker.upper()
+        cash_amount = shares * price_eur + commission
+
+        if transaction_type == "buy":
+            cash_type = "debit"
+            cash_note = f"Bought {shares:.4f} {ticker_upper} shares at €{price_eur:.2f}/share"
+        else:  # sell
+            cash_type = "credit"
+            cash_amount = shares * price_eur - commission  # Subtract commission from proceeds
+            cash_note = f"Sold {shares:.4f} {ticker_upper} shares at €{price_eur:.2f}/share"
+
+        # Check if identical cash entry already exists (idempotency)
+        existing = conn.execute(
+            """
+            SELECT id FROM cash_transactions
+            WHERE portfolio_id = ?
+              AND cash_type = ?
+              AND amount_eur = ?
+              AND transaction_date = ?
+              AND notes = ?
+            LIMIT 1
+            """,
+            (portfolio_id, cash_type, cash_amount, transaction_date, cash_note),
+        ).fetchone()
+
+        if not existing:
+            conn.execute(
+                """
+                INSERT INTO cash_transactions (portfolio_id, cash_type, amount_eur, transaction_date, notes)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (portfolio_id, cash_type, cash_amount, transaction_date, cash_note),
+            )
+
         conn.commit()
     except Exception:
         conn.rollback()

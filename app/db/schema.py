@@ -107,6 +107,162 @@ def ensure_schema() -> None:
             """
         )
 
+        # Strategy definitions table (signal generation strategies)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS strategy_definitions (
+                strategy_key TEXT PRIMARY KEY,
+                name TEXT,
+                description TEXT,
+                params_json TEXT,
+                updated_at TEXT
+            );
+            """
+        )
+
+        # Ticker-to-strategy mapping (which strategy applies to which ticker)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ticker_strategy_map (
+                portfolio_id INTEGER,
+                ticker TEXT,
+                strategy_key TEXT,
+                updated_at TEXT,
+                PRIMARY KEY (portfolio_id, ticker)
+            );
+            """
+        )
+
+        # Signals backlog (historical signals for review)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS signals_backlog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER,
+                ts TEXT,
+                ticker TEXT,
+                strategy_key TEXT,
+                signal TEXT,
+                reason TEXT,
+                meta_json TEXT
+            );
+            """
+        )
+
+        # Benchmarks table (for Portfolio Overview comparisons)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS benchmarks (
+                benchmark_id INTEGER PRIMARY KEY,
+                code TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                base_currency TEXT NOT NULL DEFAULT 'EUR',
+                description TEXT,
+                is_active INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            """
+        )
+
+        # Benchmark constituents (tickers and weights)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS benchmark_tickers (
+                benchmark_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                weight REAL,
+                added_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (benchmark_id, ticker),
+                FOREIGN KEY (benchmark_id) REFERENCES benchmarks(benchmark_id)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_benchmark_tickers_ticker
+            ON benchmark_tickers(ticker);
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_benchmark_tickers_benchmark_id
+            ON benchmark_tickers(benchmark_id);
+            """
+        )
+
+        # Add ticker and region columns to benchmarks (idempotent via try/except)
+        try:
+            cur.execute("ALTER TABLE benchmarks ADD COLUMN ticker TEXT")
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            cur.execute("ALTER TABLE benchmarks ADD COLUMN region TEXT")
+        except Exception:
+            pass  # Column already exists
+
+        # Benchmark EOD price cache table
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS benchmark_eod (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                benchmark_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                close REAL NOT NULL,
+                UNIQUE(benchmark_id, date),
+                FOREIGN KEY (benchmark_id) REFERENCES benchmarks(benchmark_id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_benchmark_eod_lookup
+            ON benchmark_eod(benchmark_id, date);
+            """
+        )
+
+        # AI settings table (per-portfolio configuration for AI model review)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_settings (
+                portfolio_id INTEGER PRIMARY KEY,
+                base_url TEXT NOT NULL DEFAULT 'http://localhost:11434',
+                model TEXT NOT NULL DEFAULT 'llama3.1:8b',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                timeout_ms INTEGER NOT NULL DEFAULT 30000,
+                updated_at TEXT
+            );
+            """
+        )
+
+        # AI job cache table (stores AI review results with plan hash for caching)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_job_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                eod_date TEXT NOT NULL,
+                plan_hash TEXT NOT NULL,
+                model TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                result TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                completed_at TEXT,
+                UNIQUE(portfolio_id, eod_date, plan_hash, model)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_ai_job_cache_lookup
+            ON ai_job_cache(portfolio_id, eod_date, plan_hash, model);
+            """
+        )
+
         # Stamp schema touch
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         cur.execute(
