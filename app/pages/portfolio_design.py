@@ -12,6 +12,19 @@ from app.db.policy_repo import load_policy_snapshot, save_policy_snapshot
 # Debug toggle: set to False to hide debug panel
 DEBUG_DESIGN_PAGE = True
 
+# Pill styling constants
+PILL_ACTIVE_STYLE = {
+    "backgroundColor": "var(--accent)",
+    "color": "white",
+    "border": "1px solid var(--accent)",
+}
+
+PILL_INACTIVE_STYLE = {
+    "backgroundColor": "transparent",
+    "color": "var(--text)",
+    "border": "1px solid var(--border-strong)",
+}
+
 
 def layout() -> html.Div:
     return html.Div(
@@ -66,284 +79,224 @@ def layout() -> html.Div:
                 children="Select a portfolio to view policy",
             ),
 
-            # Pie charts row
+            # Nav pills for panel navigation
             html.Div(
-                className="grid-2",
-                style={"marginTop": "14px", "marginBottom": "14px"},
+                className="card",
+                style={"marginBottom": "14px"},
                 children=[
-                    html.Div(
-                        className="card",
+                    dbc.Nav(
+                        pills=True,
+                        className="segmented-pills",
                         children=[
-                            html.Div("Target Allocation – Sectors", className="card-title"),
-                            html.Div(id="design-sector-total", className="hint-text", style={"marginBottom": "8px"}),
-                            dcc.Graph(id="design-sector-chart", config={"displayModeBar": False}),
-                        ],
-                    ),
-                    html.Div(
-                        className="card",
-                        children=[
-                            html.Div("Target Allocation – Regions", className="card-title"),
-                            html.Div(id="design-region-total", className="hint-text", style={"marginBottom": "8px"}),
-                            dcc.Graph(id="design-region-chart", config={"displayModeBar": False}),
+                            dbc.NavLink(
+                                "Sector",
+                                id="design-nav-sector",
+                                active=True,
+                                style=PILL_ACTIVE_STYLE,
+                            ),
+                            dbc.NavLink(
+                                "Region",
+                                id="design-nav-region",
+                                active=False,
+                                style=PILL_INACTIVE_STYLE,
+                            ),
+                            dbc.NavLink(
+                                "Policy",
+                                id="design-nav-policy",
+                                active=False,
+                                style=PILL_INACTIVE_STYLE,
+                            ),
                         ],
                     ),
                 ],
             ),
 
-            # Accordion with editable tables and policy settings
-            dbc.Accordion(
-                id="design-accordion",
-                start_collapsed=False,
+            # Panel 1: Sector Allocation (visible by default)
+            html.Div(
+                id="design-panel-sector",
+                style={"display": "block"},
                 children=[
-                    dbc.AccordionItem(
-                        title="Sector Allocation",
+                    html.Div(
+                        className="grid-2",
                         children=[
+                            # Left column: Pie chart
                             html.Div(
-                                "Editable table. Fill the bottom row to add new sectors. Select rows and click Delete to remove.",
-                                className="hint-text",
-                                style={"marginBottom": "10px"},
-                            ),
-                            dbc.Button(
-                                "Delete selected",
-                                id="design-sector-delete",
-                                color="secondary",
-                                size="sm",
-                                style={"marginBottom": "10px"},
-                                n_clicks=0,
-                            ),
-                            DataTable(
-                                id="design-sector-targets",
-                                columns=[
-                                    {"name": "Sector", "id": "sector", "editable": True},
-                                    {"name": "Target %", "id": "target_pct", "type": "numeric", "editable": True},
-                                    {"name": "Min %", "id": "min_pct", "type": "numeric", "editable": True},
-                                    {"name": "Max %", "id": "max_pct", "type": "numeric", "editable": True},
+                                className="card",
+                                children=[
+                                    html.Div("Target Allocation – Sectors", className="card-title"),
+                                    html.Div(id="design-sector-total", className="hint-text", style={"marginBottom": "8px"}),
+                                    dcc.Graph(id="design-sector-chart", config={"displayModeBar": False}),
                                 ],
-                                data=[],
-                                page_size=12,
-                                row_selectable="multi",
-                                style_table={"overflowX": "auto"},
-                                style_cell={"padding": "10px", "textAlign": "left"},
-                                style_header={"fontWeight": "600"},
+                            ),
+                            # Right column: Table
+                            html.Div(
+                                className="card",
+                                children=[
+                                    html.Div("Sector Allocation", className="card-title"),
+                                    html.Div(
+                                        "Editable table. Fill the bottom row to add new sectors. Select rows and click Delete to remove.",
+                                        className="hint-text",
+                                        style={"marginBottom": "10px"},
+                                    ),
+                                    dbc.Button(
+                                        "Delete selected",
+                                        id="design-sector-delete",
+                                        color="secondary",
+                                        size="sm",
+                                        style={"marginBottom": "10px"},
+                                        n_clicks=0,
+                                    ),
+                                    DataTable(
+                                        id="design-sector-targets",
+                                        columns=[
+                                            {"name": "Sector", "id": "sector", "editable": True},
+                                            {"name": "Target %", "id": "target_pct", "type": "numeric", "editable": True},
+                                            {"name": "Min %", "id": "min_pct", "type": "numeric", "editable": True},
+                                            {"name": "Max %", "id": "max_pct", "type": "numeric", "editable": True},
+                                        ],
+                                        data=[],
+                                        page_size=12,
+                                        row_selectable="multi",
+                                        style_table={"overflowX": "auto"},
+                                        style_cell={"padding": "10px", "textAlign": "left"},
+                                        style_header={"fontWeight": "600"},
+                                    ),
+                                ],
                             ),
                         ],
                     ),
-                    dbc.AccordionItem(
-                        title="Region Allocation",
+                ],
+            ),
+
+            # Panel 2: Region Allocation (hidden by default)
+            html.Div(
+                id="design-panel-region",
+                style={"display": "none"},
+                children=[
+                    html.Div(
+                        className="grid-2",
                         children=[
+                            # Left column: Pie chart
                             html.Div(
-                                "Editable table. Fill the bottom row to add new regions. Select rows and click Delete to remove.",
-                                className="hint-text",
-                                style={"marginBottom": "10px"},
-                            ),
-                            dbc.Button(
-                                "Delete selected",
-                                id="design-region-delete",
-                                color="secondary",
-                                size="sm",
-                                style={"marginBottom": "10px"},
-                                n_clicks=0,
-                            ),
-                            DataTable(
-                                id="design-region-targets",
-                                columns=[
-                                    {"name": "Region", "id": "region", "editable": True},
-                                    {"name": "Target %", "id": "target_pct", "type": "numeric", "editable": True},
-                                    {"name": "Min %", "id": "min_pct", "type": "numeric", "editable": True},
-                                    {"name": "Max %", "id": "max_pct", "type": "numeric", "editable": True},
+                                className="card",
+                                children=[
+                                    html.Div("Target Allocation – Regions", className="card-title"),
+                                    html.Div(id="design-region-total", className="hint-text", style={"marginBottom": "8px"}),
+                                    dcc.Graph(id="design-region-chart", config={"displayModeBar": False}),
                                 ],
-                                data=[],
-                                page_size=12,
-                                row_selectable="multi",
-                                style_table={"overflowX": "auto"},
-                                style_cell={"padding": "10px", "textAlign": "left"},
-                                style_header={"fontWeight": "600"},
+                            ),
+                            # Right column: Table
+                            html.Div(
+                                className="card",
+                                children=[
+                                    html.Div("Region Allocation", className="card-title"),
+                                    html.Div(
+                                        "Editable table. Fill the bottom row to add new regions. Select rows and click Delete to remove.",
+                                        className="hint-text",
+                                        style={"marginBottom": "10px"},
+                                    ),
+                                    dbc.Button(
+                                        "Delete selected",
+                                        id="design-region-delete",
+                                        color="secondary",
+                                        size="sm",
+                                        style={"marginBottom": "10px"},
+                                        n_clicks=0,
+                                    ),
+                                    DataTable(
+                                        id="design-region-targets",
+                                        columns=[
+                                            {"name": "Region", "id": "region", "editable": True},
+                                            {"name": "Target %", "id": "target_pct", "type": "numeric", "editable": True},
+                                            {"name": "Min %", "id": "min_pct", "type": "numeric", "editable": True},
+                                            {"name": "Max %", "id": "max_pct", "type": "numeric", "editable": True},
+                                        ],
+                                        data=[],
+                                        page_size=12,
+                                        row_selectable="multi",
+                                        style_table={"overflowX": "auto"},
+                                        style_cell={"padding": "10px", "textAlign": "left"},
+                                        style_header={"fontWeight": "600"},
+                                    ),
+                                ],
                             ),
                         ],
                     ),
-                    dbc.AccordionItem(
-                        title="Policy Settings",
+                ],
+            ),
+
+            # Panel 3: Policy Settings (hidden by default)
+            html.Div(
+                id="design-panel-policy",
+                style={"display": "none"},
+                children=[
+                    html.Div(
+                        className="card",
+                        children=[
+                            html.Div("Benchmark & Profile", className="card-title"),
+                            html.Div(
+                                className="grid-3",
+                                children=[
+                                    html.Div(
+                                        children=[
+                                            html.Div("Benchmark", className="field-label"),
+                                            dbc.Select(
+                                                id="design-benchmark",
+                                                options=[
+                                                    {"label": "VWCE (All-World)", "value": "VWCE"},
+                                                    {"label": "S&P 500 (SPY)", "value": "SPY"},
+                                                    {"label": "STOXX Europe 600", "value": "SXXP"},
+                                                ],
+                                                value=None,
+                                            ),
+                                        ]
+                                    ),
+                                    html.Div(
+                                        children=[
+                                            html.Div("Risk profile", className="field-label"),
+                                            dbc.Select(
+                                                id="design-risk-profile",
+                                                options=[
+                                                    {"label": "Conservative", "value": "conservative"},
+                                                    {"label": "Balanced", "value": "balanced"},
+                                                    {"label": "Aggressive", "value": "aggressive"},
+                                                ],
+                                                value=None,
+                                            ),
+                                        ]
+                                    ),
+                                    html.Div(
+                                        children=[
+                                            html.Div("Base currency", className="field-label"),
+                                            dcc.Input(
+                                                id="design-currency",
+                                                type="text",
+                                                value="EUR",
+                                                disabled=True,
+                                                className="text-input",
+                                            ),
+                                        ]
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="grid-2",
+                        style={"marginTop": "14px"},
                         children=[
                             html.Div(
                                 className="card",
-                                style={"border": "none", "padding": "0"},
                                 children=[
-                                    html.Div("Benchmark & Profile", className="card-title"),
+                                    html.Div("Risk limits", className="card-title"),
                                     html.Div(
-                                        className="grid-3",
+                                        className="grid-2",
                                         children=[
                                             html.Div(
                                                 children=[
-                                                    html.Div("Benchmark", className="field-label"),
-                                                    dbc.Select(
-                                                        id="design-benchmark",
-                                                        options=[
-                                                            {"label": "VWCE (All-World)", "value": "VWCE"},
-                                                            {"label": "S&P 500 (SPY)", "value": "SPY"},
-                                                            {"label": "STOXX Europe 600", "value": "SXXP"},
-                                                        ],
-                                                        value=None,
-                                                    ),
-                                                ]
-                                            ),
-                                            html.Div(
-                                                children=[
-                                                    html.Div("Risk profile", className="field-label"),
-                                                    dbc.Select(
-                                                        id="design-risk-profile",
-                                                        options=[
-                                                            {"label": "Conservative", "value": "conservative"},
-                                                            {"label": "Balanced", "value": "balanced"},
-                                                            {"label": "Aggressive", "value": "aggressive"},
-                                                        ],
-                                                        value=None,
-                                                    ),
-                                                ]
-                                            ),
-                                            html.Div(
-                                                children=[
-                                                    html.Div("Base currency", className="field-label"),
+                                                    html.Div("Max position size %", className="field-label"),
                                                     dcc.Input(
-                                                        id="design-currency",
-                                                        type="text",
-                                                        value="EUR",
-                                                        disabled=True,
-                                                        className="text-input",
-                                                    ),
-                                                ]
-                                            ),
-                                        ],
-                                    ),
-                                ],
-                            ),
-                            html.Div(
-                                className="grid-2",
-                                style={"marginTop": "14px"},
-                                children=[
-                                    html.Div(
-                                        className="card",
-                                        style={"border": "none", "padding": "0"},
-                                        children=[
-                                            html.Div("Risk limits", className="card-title"),
-                                            html.Div(
-                                                className="grid-2",
-                                                children=[
-                                                    html.Div(
-                                                        children=[
-                                                            html.Div("Max position size %", className="field-label"),
-                                                            dcc.Input(
-                                                                id="design-max-position",
-                                                                type="number",
-                                                                value=None,
-                                                                min=0,
-                                                                max=100,
-                                                                step=0.5,
-                                                                className="text-input",
-                                                            ),
-                                                        ]
-                                                    ),
-                                                    html.Div(
-                                                        children=[
-                                                            html.Div("Max sector exposure %", className="field-label"),
-                                                            dcc.Input(
-                                                                id="design-max-sector",
-                                                                type="number",
-                                                                value=None,
-                                                                min=0,
-                                                                max=100,
-                                                                step=0.5,
-                                                                className="text-input",
-                                                            ),
-                                                        ]
-                                                    ),
-                                                ],
-                                            ),
-                                        ],
-                                    ),
-                                    html.Div(
-                                        className="card",
-                                        style={"border": "none", "padding": "0"},
-                                        children=[
-                                            html.Div("Cash policy", className="card-title"),
-                                            html.Div(
-                                                className="grid-3",
-                                                children=[
-                                                    html.Div(
-                                                        children=[
-                                                            html.Div("Cash min %", className="field-label"),
-                                                            dcc.Input(
-                                                                id="design-cash-min",
-                                                                type="number",
-                                                                value=None,
-                                                                min=0,
-                                                                max=100,
-                                                                step=0.5,
-                                                                className="text-input",
-                                                            ),
-                                                        ]
-                                                    ),
-                                                    html.Div(
-                                                        children=[
-                                                            html.Div("Cash target %", className="field-label"),
-                                                            dcc.Input(
-                                                                id="design-cash-target",
-                                                                type="number",
-                                                                value=None,
-                                                                min=0,
-                                                                max=100,
-                                                                step=0.5,
-                                                                className="text-input",
-                                                            ),
-                                                        ]
-                                                    ),
-                                                    html.Div(
-                                                        children=[
-                                                            html.Div("Cash max %", className="field-label"),
-                                                            dcc.Input(
-                                                                id="design-cash-max",
-                                                                type="number",
-                                                                value=None,
-                                                                min=0,
-                                                                max=100,
-                                                                step=0.5,
-                                                                className="text-input",
-                                                            ),
-                                                        ]
-                                                    ),
-                                                ],
-                                            ),
-                                        ],
-                                    ),
-                                ],
-                            ),
-                            html.Div(
-                                className="card",
-                                style={"marginTop": "14px", "border": "none", "padding": "0"},
-                                children=[
-                                    html.Div("Rebalancing policy", className="card-title"),
-                                    html.Div(
-                                        className="grid-3",
-                                        children=[
-                                            html.Div(
-                                                children=[
-                                                    html.Div("Frequency", className="field-label"),
-                                                    dbc.Select(
-                                                        id="design-rebalance-freq",
-                                                        options=[
-                                                            {"label": "Monthly", "value": "monthly"},
-                                                            {"label": "Quarterly", "value": "quarterly"},
-                                                            {"label": "Semi-annually", "value": "semiannual"},
-                                                            {"label": "Annually", "value": "annual"},
-                                                        ],
-                                                        value=None,
-                                                    ),
-                                                ]
-                                            ),
-                                            html.Div(
-                                                children=[
-                                                    html.Div("Drift trigger %", className="field-label"),
-                                                    dcc.Input(
-                                                        id="design-drift-trigger",
+                                                        id="design-max-position",
                                                         type="number",
                                                         value=None,
                                                         min=0,
@@ -355,14 +308,68 @@ def layout() -> html.Div:
                                             ),
                                             html.Div(
                                                 children=[
-                                                    html.Div("Method", className="field-label"),
-                                                    dbc.Select(
-                                                        id="design-rebalance-method",
-                                                        options=[
-                                                            {"label": "Contributions-first (preferred)", "value": "contributions_first"},
-                                                            {"label": "Sell & buy to target", "value": "sell_buy"},
-                                                        ],
+                                                    html.Div("Max sector exposure %", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-max-sector",
+                                                        type="number",
                                                         value=None,
+                                                        min=0,
+                                                        max=100,
+                                                        step=0.5,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className="card",
+                                children=[
+                                    html.Div("Cash policy", className="card-title"),
+                                    html.Div(
+                                        className="grid-3",
+                                        children=[
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Cash min %", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-cash-min",
+                                                        type="number",
+                                                        value=None,
+                                                        min=0,
+                                                        max=100,
+                                                        step=0.5,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Cash target %", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-cash-target",
+                                                        type="number",
+                                                        value=None,
+                                                        min=0,
+                                                        max=100,
+                                                        step=0.5,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Cash max %", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-cash-max",
+                                                        type="number",
+                                                        value=None,
+                                                        min=0,
+                                                        max=100,
+                                                        step=0.5,
+                                                        className="text-input",
                                                     ),
                                                 ]
                                             ),
@@ -372,8 +379,63 @@ def layout() -> html.Div:
                             ),
                         ],
                     ),
+                    html.Div(
+                        className="card",
+                        style={"marginTop": "14px"},
+                        children=[
+                            html.Div("Rebalancing policy", className="card-title"),
+                            html.Div(
+                                className="grid-3",
+                                children=[
+                                    html.Div(
+                                        children=[
+                                            html.Div("Frequency", className="field-label"),
+                                            dbc.Select(
+                                                id="design-rebalance-freq",
+                                                options=[
+                                                    {"label": "Monthly", "value": "monthly"},
+                                                    {"label": "Quarterly", "value": "quarterly"},
+                                                    {"label": "Semi-annually", "value": "semiannual"},
+                                                    {"label": "Annually", "value": "annual"},
+                                                ],
+                                                value=None,
+                                            ),
+                                        ]
+                                    ),
+                                    html.Div(
+                                        children=[
+                                            html.Div("Drift trigger %", className="field-label"),
+                                            dcc.Input(
+                                                id="design-drift-trigger",
+                                                type="number",
+                                                value=None,
+                                                min=0,
+                                                max=100,
+                                                step=0.5,
+                                                className="text-input",
+                                            ),
+                                        ]
+                                    ),
+                                    html.Div(
+                                        children=[
+                                            html.Div("Method", className="field-label"),
+                                            dbc.Select(
+                                                id="design-rebalance-method",
+                                                options=[
+                                                    {"label": "Contributions-first (preferred)", "value": "contributions_first"},
+                                                    {"label": "Sell & buy to target", "value": "sell_buy"},
+                                                ],
+                                                value=None,
+                                            ),
+                                        ]
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
                 ],
             ),
+
 
             # Debug panel (toggle with DEBUG_DESIGN_PAGE constant)
             html.Div(
@@ -406,6 +468,76 @@ def design_load_portfolios(pathname: str):
     options = [{"label": r["name"], "value": r["id"]} for r in rows]
     default_value = options[0]["value"] if options else None
     return options, default_value
+
+
+# Callback: toggle between panels based on nav pill clicks
+@callback(
+    Output("design-panel-sector", "style"),
+    Output("design-panel-region", "style"),
+    Output("design-panel-policy", "style"),
+    Output("design-nav-sector", "active"),
+    Output("design-nav-region", "active"),
+    Output("design-nav-policy", "active"),
+    Output("design-nav-sector", "style"),
+    Output("design-nav-region", "style"),
+    Output("design-nav-policy", "style"),
+    Input("design-nav-sector", "n_clicks"),
+    Input("design-nav-region", "n_clicks"),
+    Input("design-nav-policy", "n_clicks"),
+    prevent_initial_call=True,
+)
+def toggle_design_panels(sector_clicks, region_clicks, policy_clicks):
+    from dash import ctx
+
+    if not ctx.triggered:
+        raise PreventUpdate
+
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+    # Default: all hidden, all inactive
+    panel_styles = {
+        "sector": {"display": "none"},
+        "region": {"display": "none"},
+        "policy": {"display": "none"},
+    }
+    active_states = {
+        "sector": False,
+        "region": False,
+        "policy": False,
+    }
+    pill_styles = {
+        "sector": PILL_INACTIVE_STYLE,
+        "region": PILL_INACTIVE_STYLE,
+        "policy": PILL_INACTIVE_STYLE,
+    }
+
+    # Determine which tab was clicked
+    if button_id == "design-nav-sector":
+        panel_styles["sector"] = {"display": "block"}
+        active_states["sector"] = True
+        pill_styles["sector"] = PILL_ACTIVE_STYLE
+    elif button_id == "design-nav-region":
+        panel_styles["region"] = {"display": "block"}
+        active_states["region"] = True
+        pill_styles["region"] = PILL_ACTIVE_STYLE
+    elif button_id == "design-nav-policy":
+        panel_styles["policy"] = {"display": "block"}
+        active_states["policy"] = True
+        pill_styles["policy"] = PILL_ACTIVE_STYLE
+    else:
+        raise PreventUpdate
+
+    return (
+        panel_styles["sector"],
+        panel_styles["region"],
+        panel_styles["policy"],
+        active_states["sector"],
+        active_states["region"],
+        active_states["policy"],
+        pill_styles["sector"],
+        pill_styles["region"],
+        pill_styles["policy"],
+    )
 
 
 # Callback 2: load policy + targets for selected portfolio (single source of truth for design-status-bar)

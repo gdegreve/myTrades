@@ -6,6 +6,38 @@ Claude must follow these rules strictly when proposing or modifying code.
 
 ---
 
+## 0. Tool-Model Execution Protocol (MANDATORY for Qwen-tools / local tool models)
+
+### 0.1 Always ground yourself in the real repo (before any edit)
+Before making ANY change, Claude must run (or instruct the user to run) commands to confirm:
+- current working directory is the repo root
+- real file structure
+- routing/navigation implementation files
+
+**Required grounding steps (in this order):**
+1) `git rev-parse --show-toplevel`
+2) `git branch --show-current`
+3) `ls -la`
+4) Identify relevant files using:
+   - `rg -n "Rebalance|Holdings|Signals|pages|sidebar|nav|router" app || true`
+   - `find app -maxdepth 3 -type f -name "*.py" | sort`
+
+Claude must NOT invent paths. If unsure, Claude must ask to run `find/rg` and wait.
+
+### 0.2 Editing behavior (tools must actually apply changes)
+- Claude must prefer tool-based edits (apply patches / modify files) rather than “imaginary diffs”.
+- Claude must not output tool schema JSON (e.g. `{"name": "Glob"}` / `{"name":"TaskList"}`) as the final answer.
+- Output must be either:
+  1) **Applied edits confirmed by `git status`**, plus a unified diff, OR
+  2) If tool edits fail: a **unified diff only** that references **real existing files** (no placeholders).
+
+### 0.3 Diff validity rules
+- Never use placeholder hashes like `1234567..abcdef`.
+- Never propose Flask/Jinja templates (`app/templates/*`) unless such folders exist in the repo (must be verified by `find`).
+- All diffs must reference real files that exist OR explicitly marked NEW FILES under existing directories.
+
+---
+
 ## 1. Architecture (NON-NEGOTIABLE)
 
 ### Separation of concerns
@@ -115,43 +147,24 @@ Examples:
 Claude should show commands like:
 - `git status`
 - `git branch --show-current`
-- `git checkout -b feat/<name>` (or `git switch -c feat/<name>`)
+- `git switch -c feat/<name>`
 - `git branch --show-current` (confirm)
 
 ### 6.3 Merge-back workflow (ONLY after user confirmation)
 Claude must **not** merge to `main` unless the user explicitly confirms the changes are correct and bug-free.
 
-When the user asks to merge:
-1. Ensure the working tree is clean:
-   - `git status`
-2. Pull latest `main` and rebase or merge (prefer rebase for linear history unless repo policy says otherwise):
-   - `git fetch origin`
-   - `git checkout main`
-   - `git pull --ff-only`
-   - `git checkout <feature-branch>`
-   - `git rebase main` (or `git merge main` if requested)
-3. Run/describe the relevant tests or smoke checks (as applicable).
-4. Merge into `main`:
-   - `git checkout main`
-   - `git merge --no-ff <feature-branch>` (or fast-forward if repo policy allows)
-5. Push:
-   - `git push origin main`
-6. Optional cleanup:
-   - `git branch -d <feature-branch>`
-   - `git push origin --delete <feature-branch>` (only if you want remote deletion)
-
-Claude should present these as commands for the user to run, and should call out any conflicts/risk points.
-
+(keep your existing merge steps here)
 
 ---
 
 ## 7. How Claude should work
 
 When asked to implement something:
-1. Explain the approach briefly
-2. Identify which files will change
-3. Apply minimal changes
-4. Warn about side effects or follow-up steps
+1. Ground the repo (Section 0) if needed
+2. Explain approach briefly
+3. Identify which files will change (real paths only)
+4. Apply minimal changes
+5. Provide unified diff + `git status` confirmation
 
 When debugging:
 - Identify the root cause first

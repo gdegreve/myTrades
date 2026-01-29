@@ -1183,3 +1183,106 @@ textarea::placeholder{
 #signals-panel-backlog .signals-filters-card .dd-blend .select__input input {
   color: #ffffff !important;
 }
+
+/* ============================================================
+   Dash DataTable – COMPACT Pagination (fix overlap + shrink)
+   ============================================================ */
+
+#rebalance-drift-table .previous-next-container,
+#rebalance-trades-table .previous-next-container{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 4px !important;
+  padding: 6px 8px 8px 8px !important;
+}
+
+/* Kill weird stacking / overlap */
+#rebalance-drift-table .previous-next-container *,
+#rebalance-trades-table .previous-next-container *{
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Buttons: smaller + tighter */
+#rebalance-drift-table .previous-next-container button,
+#rebalance-trades-table .previous-next-container button{
+  width: 26px !important;
+  height: 24px !important;
+  border-radius: 7px !important;
+  font-size: 12px !important;
+  line-height: 22px !important;
+  padding: 0 !important;
+
+  border: 1px solid rgba(255,255,255,0.12) !important;
+  background: rgba(255,255,255,0.04) !important;
+  color: rgba(255,255,255,0.78) !important;
+  box-shadow: none !important;
+  transition: background 120ms ease, border 120ms ease;
+}
+
+#rebalance-drift-table .previous-next-container button:hover,
+#rebalance-trades-table .previous-next-container button:hover{
+  background: rgba(45,125,255,0.18) !important;
+  border-color: rgba(45,125,255,0.40) !important;
+}
+
+/* Disabled */
+#rebalance-drift-table .previous-next-container button:disabled,
+#rebalance-trades-table .previous-next-container button:disabled{
+  opacity: 0.3 !important;
+}
+
+/* Page number wrapper */
+#rebalance-drift-table .page-number,
+#rebalance-trades-table .page-number{
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;   /* tighter 1 / 2 */
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.75) !important;
+}
+
+/* The small "1" input */
+#rebalance-drift-table .page-number input,
+#rebalance-trades-table .page-number input{
+  width: 28px !important;
+  height: 22px !important;
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  text-align: center !important;
+  padding: 0 !important;
+
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  background: rgba(255,255,255,0.06) !important;
+  color: rgba(255,255,255,0.92) !important;
+  box-shadow: none !important;
+}
+
+/* Remove number spinners */
+#rebalance-drift-table input[type=number]::-webkit-outer-spin-button,
+#rebalance-drift-table input[type=number]::-webkit-inner-spin-button,
+#rebalance-trades-table input[type=number]::-webkit-outer-spin-button,
+#rebalance-trades-table input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance: none;
+  margin: 0;
+}
+#rebalance-drift-table input[type=number],
+#rebalance-trades-table input[type=number]{
+  -moz-appearance: textfield;
+}
+
+/* Slash + total pages */
+#rebalance-drift-table .page-number span,
+#rebalance-trades-table .page-number span{
+  margin: 0 1px !important;
+  font-size: 12px !important;
+  color: rgba(255,255,255,0.65) !important;
+}
+
+/* Cash preview text sizing (Rebalance page) */
+.cash-preview-text {
+  font-size: 14px;
+  margin-bottom: 6px;
+  color: rgba(255,255,255,0.85);
+}

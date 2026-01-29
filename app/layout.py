@@ -10,8 +10,9 @@ NAV = [
         [
             ("Dashboard", "/portfolio/overview", "fa-solid fa-house"),
             ("Exchange", "/analytics/fundamentals", "fa-solid fa-right-left"),
-            ("Market", "/analytics/technical", "fa-solid fa-chart-line"),
+            ("Market", "/market", "fa-solid fa-chart-line"),
             ("Wallets", "/tools/settings", "fa-solid fa-wallet"),
+            ("Analysis", "/analysis/analysis_fundamantal", "fa-solid fa-magnifying-glass-chart"),
             # Portfolio becomes a parent with a submenu (still clickable)
             ("Portfolio", "/portfolio/overview", "fa-solid fa-briefcase"),
         ],
@@ -23,6 +24,11 @@ NAV = [
             ("Help & Support", "/support/help", "fa-regular fa-circle-question"),
         ],
     ),
+]
+
+ANALYSIS_SUBNAV = [
+    ("Fundamental", "/analysis/analysis_fundamental"),
+    ("Technical", "/analysis/analysis_technical"),
 ]
 
 PORTFOLIO_SUBNAV = [

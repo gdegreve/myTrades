@@ -114,6 +114,29 @@ def load_policy_snapshot(portfolio_id: int) -> dict[str, Any]:
             ).fetchall()
             snapshot["region_targets"] = [dict(r) for r in rows]
 
+        # Fallback: if no saved region targets, derive from holdings + ticker_regions
+        if not snapshot["region_targets"] and _table_exists(conn, "ticker_regions"):
+            # Try to get current holdings from transactions (ledger-based)
+            if _table_exists(conn, "transactions"):
+                rows = conn.execute(
+                    """
+                    SELECT DISTINCT COALESCE(tr.region, 'Unknown') AS region
+                    FROM transactions t
+                    LEFT JOIN ticker_regions tr ON tr.ticker = t.ticker
+                    WHERE t.portfolio_id=? AND t.transaction_type IN ('buy', 'sell')
+                    ORDER BY region COLLATE NOCASE
+                    """,
+                    (portfolio_id,),
+                ).fetchall()
+
+                regions = [r["region"] for r in rows if r and r["region"]]
+                if regions:
+                    # Equal-weight fallback targets (not saved to DB)
+                    equal_weight = 100.0 / len(regions) if regions else 0.0
+                    snapshot["region_targets"] = [
+                        {"region": r, "target_pct": equal_weight, "min_pct": None, "max_pct": None} for r in regions
+                    ]
+
         return snapshot
     finally:
         conn.close()

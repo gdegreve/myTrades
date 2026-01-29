@@ -10,8 +10,9 @@ from app.pages import (
     portfolio_holdings,
     portfolio_signals,
     portfolio_rebalance,
-    analytics_fundamentals,
-    analytics_technical,
+    analysis_fundamental,
+    analysis_technical,
+    market,
     tools_settings,
 )
 
@@ -49,10 +50,12 @@ def route(pathname: str):
         return portfolio_signals.layout()
     if pathname == "/portfolio/rebalance":
         return portfolio_rebalance.layout() 
-    if pathname == "/analytics/fundamentals":
-        return analytics_fundamentals.layout()
-    if pathname == "/analytics/technical":
-        return analytics_technical.layout()
+    if pathname == "/analysis/fundamental":
+        return analysis_fundamental.layout()
+    if pathname == "/analysis/technical":
+        return analysis_technical.layout()
+    if pathname == "/market":
+        return market.layout()
     if pathname == "/portfolio/design":
         return portfolio_design.layout()
     if pathname == "/tools/settings":

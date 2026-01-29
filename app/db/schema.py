@@ -192,18 +192,74 @@ def ensure_schema() -> None:
             """
         )
 
-        # Seed benchmark data (idempotent)
+        # Add ticker and region columns to benchmarks (idempotent via try/except)
+        try:
+            cur.execute("ALTER TABLE benchmarks ADD COLUMN ticker TEXT")
+        except Exception:
+            pass  # Column already exists
+
+        try:
+            cur.execute("ALTER TABLE benchmarks ADD COLUMN region TEXT")
+        except Exception:
+            pass  # Column already exists
+
+        # Benchmark EOD price cache table
         cur.execute(
             """
-            INSERT OR IGNORE INTO benchmarks (code, name, base_currency)
-            VALUES ('SP500', 'S&P 500', 'USD');
+            CREATE TABLE IF NOT EXISTS benchmark_eod (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                benchmark_id INTEGER NOT NULL,
+                date TEXT NOT NULL,
+                close REAL NOT NULL,
+                UNIQUE(benchmark_id, date),
+                FOREIGN KEY (benchmark_id) REFERENCES benchmarks(benchmark_id) ON DELETE CASCADE
+            );
             """
         )
 
         cur.execute(
             """
-            INSERT OR IGNORE INTO benchmarks (code, name, base_currency)
-            VALUES ('STOXX600', 'STOXX Europe 600', 'EUR');
+            CREATE INDEX IF NOT EXISTS idx_benchmark_eod_lookup
+            ON benchmark_eod(benchmark_id, date);
+            """
+        )
+
+        # AI settings table (per-portfolio configuration for AI model review)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_settings (
+                portfolio_id INTEGER PRIMARY KEY,
+                base_url TEXT NOT NULL DEFAULT 'http://localhost:11434',
+                model TEXT NOT NULL DEFAULT 'llama3.1:8b',
+                enabled INTEGER NOT NULL DEFAULT 1,
+                timeout_ms INTEGER NOT NULL DEFAULT 30000,
+                updated_at TEXT
+            );
+            """
+        )
+
+        # AI job cache table (stores AI review results with plan hash for caching)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ai_job_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                eod_date TEXT NOT NULL,
+                plan_hash TEXT NOT NULL,
+                model TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                result TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                completed_at TEXT,
+                UNIQUE(portfolio_id, eod_date, plan_hash, model)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_ai_job_cache_lookup
+            ON ai_job_cache(portfolio_id, eod_date, plan_hash, model);
             """
         )
 
