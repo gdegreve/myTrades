@@ -82,3 +82,5 @@ pip-wheel-metadata/
 coverage/
 htmlcov/
 
+data/*.sqlite-shm
+data/*.sqlite-wal
