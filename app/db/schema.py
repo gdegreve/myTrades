@@ -263,6 +263,95 @@ def ensure_schema() -> None:
             """
         )
 
+        # Benchmark snapshot runs table (tracks refresh jobs with progress)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS benchmark_snapshot_runs (
+                run_id TEXT PRIMARY KEY,
+                benchmark_id INTEGER NOT NULL,
+                run_type TEXT NOT NULL,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                total INTEGER DEFAULT 0,
+                processed INTEGER DEFAULT 0,
+                succeeded INTEGER DEFAULT 0,
+                failed INTEGER DEFAULT 0,
+                current_ticker TEXT,
+                message TEXT,
+                FOREIGN KEY (benchmark_id) REFERENCES benchmarks(benchmark_id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_snapshot_runs_benchmark
+            ON benchmark_snapshot_runs(benchmark_id);
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_snapshot_runs_status
+            ON benchmark_snapshot_runs(status);
+            """
+        )
+
+        # Benchmark fundamentals table (stores scored fundamental data per ticker)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS benchmark_fundamentals (
+                run_id TEXT NOT NULL,
+                benchmark_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                sector TEXT,
+                bench_score_total REAL,
+                bench_score_quality REAL,
+                bench_score_safety REAL,
+                bench_score_value REAL,
+                bench_sector_pct_total REAL,
+                bench_sector_n INTEGER,
+                bench_confidence TEXT,
+                fundamental_label TEXT,
+                roe REAL,
+                operating_margins REAL,
+                pe_ttm REAL,
+                forward_pe REAL,
+                peg REAL,
+                ev_to_ebitda REAL,
+                price_to_book REAL,
+                price_to_sales REAL,
+                status TEXT NOT NULL,
+                error_message TEXT,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (run_id, benchmark_id, ticker),
+                FOREIGN KEY (benchmark_id) REFERENCES benchmarks(benchmark_id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_fundamentals_benchmark
+            ON benchmark_fundamentals(benchmark_id);
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_fundamentals_ticker
+            ON benchmark_fundamentals(ticker);
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_fundamentals_label
+            ON benchmark_fundamentals(fundamental_label);
+            """
+        )
+
         # Stamp schema touch
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         cur.execute(

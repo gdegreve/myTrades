@@ -11,6 +11,11 @@ from dash import dcc, html, Input, Output, callback
 from dash.dash_table import DataTable
 from dash.exceptions import PreventUpdate
 import plotly.graph_objects as go
+import yfinance as yf
+import matplotlib
+matplotlib.use('Agg')
+import base64
+from datetime import date as dt_date
 
 from app.db.portfolio_repo import list_portfolios
 from app.db.overview_repo import (
@@ -26,6 +31,8 @@ from app.db.overview_repo import (
     get_all_current_positions,
     get_all_sector_allocations,
     get_daily_cashflows,
+    upsert_intraday_prices,
+    get_intraday_prices,
 )
 
 
@@ -270,8 +277,8 @@ def layout() -> html.Div:
                             html.Div(
                                 className="card-title-row",
                                 children=[
-                                    html.Div("Top 5 Contributors (Day P/L)", className="card-title"),
-                                    html.Div("Sorted by absolute daily change", className="hint-text"),
+                                    html.Div("Contributors (Day P/L)", className="card-title"),
+                                    html.Div("All positions sorted by absolute daily change", className="hint-text"),
                                 ],
                             ),
                             DataTable(
@@ -283,9 +290,11 @@ def layout() -> html.Div:
                                     {"name": "Curr Price", "id": "curr_price", "type": "numeric"},
                                     {"name": "Daily P/L", "id": "daily_pnl", "type": "numeric"},
                                     {"name": "Daily %", "id": "daily_pct", "type": "numeric"},
+                                    {"name": "Trend", "id": "trend", "presentation": "markdown"},
                                 ],
                                 data=[],
-                                page_size=5,
+                                sort_action="native",
+                                page_size=10,
                                 style_table={"overflowX": "auto"},
                                 style_cell={"padding": "10px", "textAlign": "left"},
                                 style_header={"fontWeight": "600"},
@@ -486,8 +495,8 @@ def layout() -> html.Div:
                     html.Div(
                         className="card-title-row",
                         children=[
-                            html.Div("Top 5 Contributors (Day P/L)", className="card-title"),
-                            html.Div("Sorted by absolute daily change", className="hint-text"),
+                            html.Div("Contributors (Day P/L)", className="card-title"),
+                            html.Div("All positions sorted by absolute daily change", className="hint-text"),
                         ],
                     ),
                     DataTable(
@@ -499,9 +508,11 @@ def layout() -> html.Div:
                             {"name": "Curr Price", "id": "curr_price", "type": "numeric"},
                             {"name": "Daily P/L", "id": "daily_pnl", "type": "numeric"},
                             {"name": "Daily %", "id": "daily_pct", "type": "numeric"},
+                            {"name": "Trend", "id": "trend", "presentation": "markdown"},
                         ],
                         data=[],
-                        page_size=5,
+                        sort_action="native",
+                        page_size=10,
                         style_table={"overflowX": "auto"},
                         style_cell={"padding": "10px", "textAlign": "left"},
                         style_header={"fontWeight": "600"},
@@ -805,18 +816,18 @@ def refresh_overview_data(portfolio_id):
             sorted_dates = sorted(all_dates)
             portfolio_values = []
 
-            for date in sorted_dates:
+            for day in sorted_dates:
                 day_value = cash_balance
                 for p in positions:
                     ticker = p["ticker"]
                     shares = p["shares"]
                     # Find price for this ticker on this date
                     ticker_prices = {pt["date"]: pt["close"] for pt in price_history.get(ticker, [])}
-                    if date in ticker_prices:
-                        day_value += shares * ticker_prices[date]
+                    if day in ticker_prices:
+                        day_value += shares * ticker_prices[day]
                     elif ticker_prices:
                         # Use most recent available price before this date
-                        available = [d for d in ticker_prices.keys() if d <= date]
+                        available = [p_day for p_day in ticker_prices.keys() if p_day <= day]
                         if available:
                             day_value += shares * ticker_prices[max(available)]
 
@@ -831,8 +842,8 @@ def refresh_overview_data(portfolio_id):
                 cashflows = get_daily_cashflows(portfolio_id)
                 daily_returns = []
                 for i in range(1, len(values)):
-                    date = sorted_dates[i]
-                    net_cf = cashflows.get(date, 0.0)
+                    day = sorted_dates[i]
+                    net_cf = cashflows.get(day, 0.0)
                     prev_val = values[i - 1]
                     if prev_val > 0:
                         r = (values[i] - prev_val - net_cf) / prev_val
@@ -885,16 +896,16 @@ def refresh_overview_data(portfolio_id):
             sorted_dates = sorted(all_dates)
             portfolio_values = []
 
-            for date in sorted_dates:
+            for day in sorted_dates:
                 day_value = cash_balance
                 for p in positions:
                     ticker = p["ticker"]
                     shares = p["shares"]
                     ticker_prices = {pt["date"]: pt["close"] for pt in price_history.get(ticker, [])}
-                    if date in ticker_prices:
-                        day_value += shares * ticker_prices[date]
+                    if day in ticker_prices:
+                        day_value += shares * ticker_prices[day]
                     elif ticker_prices:
-                        available = [d for d in ticker_prices.keys() if d <= date]
+                        available = [p_day for p_day in ticker_prices.keys() if p_day <= day]
                         if available:
                             day_value += shares * ticker_prices[max(available)]
 
@@ -959,16 +970,16 @@ def refresh_overview_data(portfolio_id):
             sorted_dates = sorted(all_dates)
             portfolio_values = []
 
-            for date in sorted_dates:
+            for day in sorted_dates:
                 day_value = cash_balance
                 for p in positions:
                     ticker = p["ticker"]
                     shares = p["shares"]
                     ticker_prices = {pt["date"]: pt["close"] for pt in price_history.get(ticker, [])}
-                    if date in ticker_prices:
-                        day_value += shares * ticker_prices[date]
+                    if day in ticker_prices:
+                        day_value += shares * ticker_prices[day]
                     elif ticker_prices:
-                        available = [d for d in ticker_prices.keys() if d <= date]
+                        available = [p_day for p_day in ticker_prices.keys() if p_day <= day]
                         if available:
                             day_value += shares * ticker_prices[max(available)]
 
@@ -1068,9 +1079,54 @@ def refresh_overview_data(portfolio_id):
                 "daily_pct": round(daily_pct, 2),
             })
 
-    # Sort by absolute P/L and take top 5
+    # Sort by absolute P/L (show all, no top-5 limit)
     contributors_data.sort(key=lambda x: abs(x["daily_pnl"]), reverse=True)
-    contributors_data = contributors_data[:5]
+
+    # Fetch intraday data for sparklines
+    today_str = dt_date.today().isoformat()
+    intraday_cache = get_intraday_prices(position_tickers, today_str)
+
+    # Try to fetch fresh intraday data for tickers that don't have cached data
+    tickers_to_fetch = [t for t in position_tickers if not intraday_cache.get(t)]
+    if tickers_to_fetch:
+        try:
+            # Bulk fetch intraday data from yfinance
+            intraday_data = yf.download(tickers_to_fetch, period="1d", interval="5m", group_by="ticker", progress=False)
+
+            for ticker in tickers_to_fetch:
+                bars = []
+                try:
+                    if len(tickers_to_fetch) == 1:
+                        ticker_data = intraday_data
+                    else:
+                        ticker_data = intraday_data[ticker]
+
+                    if not ticker_data.empty:
+                        for idx, row in ticker_data.iterrows():
+                            if not np.isnan(row.get('Close', np.nan)):
+                                bars.append({
+                                    "ts": int(idx.timestamp()),
+                                    "price": float(row['Close']),
+                                })
+                except (KeyError, AttributeError):
+                    pass
+
+                if bars:
+                    upsert_intraday_prices(ticker, today_str, bars)
+                    intraday_cache[ticker] = bars
+        except Exception:
+            pass  # Silently handle yfinance failures
+
+    # Add sparkline to each row
+    for row in contributors_data:
+        ticker = row["ticker"]
+        pos = row["daily_pnl"]
+        bars = intraday_cache.get(ticker, [])
+        if bars and len(bars) >= 2:
+            last_ts = bars[-1]["ts"]
+            row["trend"] = f"![t](/sparkline/{ticker}?day={today_str}&pos={pos}&ts={last_ts})"
+        else:
+            row["trend"] = ""
 
     return (
         data_warning,
@@ -1217,14 +1273,14 @@ def refresh_aggregated_overview(pathname):
             sorted_dates = sorted(all_dates)
             portfolio_values = []
 
-            for date in sorted_dates:
+            for day in sorted_dates:
                 day_value = total_cash_balance
                 for ticker, shares in ticker_shares.items():
                     ticker_prices = {pt["date"]: pt["close"] for pt in price_history.get(ticker, [])}
-                    if date in ticker_prices:
-                        day_value += shares * ticker_prices[date]
+                    if day in ticker_prices:
+                        day_value += shares * ticker_prices[day]
                     elif ticker_prices:
-                        available = [d for d in ticker_prices.keys() if d <= date]
+                        available = [p_day for p_day in ticker_prices.keys() if p_day <= day]
                         if available:
                             day_value += shares * ticker_prices[max(available)]
 
@@ -1240,8 +1296,8 @@ def refresh_aggregated_overview(pathname):
                 cashflows = get_daily_cashflows(None)
                 daily_returns = []
                 for i in range(1, len(values)):
-                    date = sorted_dates[i]
-                    net_cf = cashflows.get(date, 0.0)
+                    day = sorted_dates[i]
+                    net_cf = cashflows.get(day, 0.0)
                     prev_val = values[i - 1]
                     if prev_val > 0:
                         r = (values[i] - prev_val - net_cf) / prev_val
@@ -1294,14 +1350,14 @@ def refresh_aggregated_overview(pathname):
             sorted_dates = sorted(all_dates)
             portfolio_values = []
 
-            for date in sorted_dates:
+            for day in sorted_dates:
                 day_value = total_cash_balance
                 for ticker, shares in ticker_shares.items():
                     ticker_prices = {pt["date"]: pt["close"] for pt in price_history.get(ticker, [])}
-                    if date in ticker_prices:
-                        day_value += shares * ticker_prices[date]
+                    if day in ticker_prices:
+                        day_value += shares * ticker_prices[day]
                     elif ticker_prices:
-                        available = [d for d in ticker_prices.keys() if d <= date]
+                        available = [p_day for p_day in ticker_prices.keys() if p_day <= day]
                         if available:
                             day_value += shares * ticker_prices[max(available)]
 
@@ -1349,14 +1405,14 @@ def refresh_aggregated_overview(pathname):
             sorted_dates = sorted(all_dates)
             portfolio_values = []
 
-            for date in sorted_dates:
+            for day in sorted_dates:
                 day_value = total_cash_balance
                 for ticker, shares in ticker_shares.items():
                     ticker_prices = {pt["date"]: pt["close"] for pt in price_history.get(ticker, [])}
-                    if date in ticker_prices:
-                        day_value += shares * ticker_prices[date]
+                    if day in ticker_prices:
+                        day_value += shares * ticker_prices[day]
                     elif ticker_prices:
-                        available = [d for d in ticker_prices.keys() if d <= date]
+                        available = [p_day for p_day in ticker_prices.keys() if p_day <= day]
                         if available:
                             day_value += shares * ticker_prices[max(available)]
 
@@ -1453,9 +1509,56 @@ def refresh_aggregated_overview(pathname):
                 "daily_pct": round(daily_pct, 2),
             })
 
-    # Sort by absolute P/L and take top 5
+    # Sort by absolute P/L (show all, no top-5 limit)
     contributors_data.sort(key=lambda x: abs(x["daily_pnl"]), reverse=True)
-    contributors_data = contributors_data[:5]
+
+    # Fetch intraday data for sparklines
+    today_str = dt_date.today().isoformat()
+    intraday_cache = get_intraday_prices(position_tickers, today_str)
+
+    # Try to fetch fresh intraday data for tickers that don't have cached data
+    tickers_to_fetch = [t for t in position_tickers if not intraday_cache.get(t)]
+    if tickers_to_fetch:
+        try:
+            # Bulk fetch intraday data from yfinance
+            intraday_data = yf.download(tickers_to_fetch, period="1d", interval="5m", group_by="ticker", progress=False)
+
+            for ticker in tickers_to_fetch:
+                bars = []
+                try:
+                    if len(tickers_to_fetch) == 1:
+                        ticker_data = intraday_data
+                    else:
+                        ticker_data = intraday_data[ticker]
+
+                    if not ticker_data.empty:
+                        for idx, row in ticker_data.iterrows():
+                            if not np.isnan(row.get('Close', np.nan)):
+                                bars.append({
+                                    "ts": int(idx.timestamp()),
+                                    "price": float(row['Close']),
+                                })
+                except (KeyError, AttributeError):
+                    pass
+
+                if bars:
+                    upsert_intraday_prices(ticker, today_str, bars)
+                    intraday_cache[ticker] = bars
+        except Exception:
+            pass  # Silently handle yfinance failures
+
+    # Add sparkline to each row
+    for row in contributors_data:
+        ticker = row["ticker"]
+        pos = row["daily_pnl"]
+        bars = intraday_cache.get(ticker, [])
+        if bars and len(bars) >= 2:
+            last_ts = bars[-1]["ts"]
+            row["trend"] = f"![t](/sparkline/{ticker}?day={today_str}&pos={pos}&ts={last_ts})"
+        else:
+            row["trend"] = ""
+
+
 
     return (
         eod_text,

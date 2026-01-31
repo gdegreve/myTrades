@@ -338,3 +338,315 @@ def get_latest_snapshot_all_benchmarks() -> list[dict]:
         return [dict(row) for row in cur.fetchall()]
     finally:
         conn.close()
+
+
+def upsert_benchmark_tickers(benchmark_id: int, tickers: list[str]) -> int:
+    """Append tickers to benchmark_tickers table (no deletion of existing).
+
+    Args:
+        benchmark_id: Benchmark ID
+        tickers: List of ticker symbols
+
+    Returns:
+        Number of tickers added (excluding duplicates)
+    """
+    if not tickers:
+        return 0
+
+    conn = get_connection()
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        added = 0
+        for ticker in tickers:
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO benchmark_tickers (benchmark_id, ticker, weight)
+                    VALUES (?, ?, NULL)
+                    """,
+                    (benchmark_id, ticker),
+                )
+                added += 1
+            except Exception:
+                pass
+        conn.commit()
+        return added
+    finally:
+        conn.close()
+
+
+def get_benchmark_tickers_with_fundamentals(benchmark_id: int) -> list[dict]:
+    """Get tickers for a benchmark with latest fundamental snapshot data.
+
+    Returns:
+        List of dicts with keys: ticker, sector, fundamental_label,
+        bench_score_total, bench_sector_pct_total, bench_confidence, updated_at
+    """
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT
+                bt.ticker,
+                bf.sector,
+                bf.fundamental_label,
+                bf.bench_score_total,
+                bf.bench_sector_pct_total,
+                bf.bench_confidence,
+                bf.updated_at
+            FROM benchmark_tickers bt
+            LEFT JOIN (
+                SELECT
+                    benchmark_id,
+                    ticker,
+                    sector,
+                    fundamental_label,
+                    bench_score_total,
+                    bench_sector_pct_total,
+                    bench_confidence,
+                    updated_at,
+                    ROW_NUMBER() OVER (PARTITION BY benchmark_id, ticker ORDER BY updated_at DESC) as rn
+                FROM benchmark_fundamentals
+                WHERE status = 'ok'
+            ) bf ON bf.benchmark_id = bt.benchmark_id AND bf.ticker = bt.ticker AND bf.rn = 1
+            WHERE bt.benchmark_id = ?
+            ORDER BY bt.ticker
+            """,
+            (benchmark_id,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def refresh_benchmark_fundamentals(benchmark_id: int, tickers: list[str]) -> dict:
+    """Refresh fundamental snapshot data for specific tickers.
+
+    Args:
+        benchmark_id: Benchmark ID
+        tickers: List of ticker symbols to refresh
+
+    Returns:
+        Dict with keys: succeeded (int), failed (int), run_id (str)
+    """
+    import yfinance as yf
+    from datetime import datetime, timezone
+
+    if not tickers:
+        return {"succeeded": 0, "failed": 0, "run_id": ""}
+
+    run_id = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    succeeded = 0
+    failed = 0
+
+    conn = get_connection()
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+
+        for ticker in tickers:
+            try:
+                stock = yf.Ticker(ticker)
+                info = stock.info
+
+                if not info or "symbol" not in info:
+                    failed += 1
+                    continue
+
+                sector = info.get("sector")
+                roe = info.get("returnOnEquity")
+                operating_margins = info.get("operatingMargins")
+                pe_ttm = info.get("trailingPE")
+                forward_pe = info.get("forwardPE")
+                peg = info.get("pegRatio")
+                ev_to_ebitda = info.get("enterpriseToEbitda")
+                price_to_book = info.get("priceToBook")
+                price_to_sales = info.get("priceToSalesTrailing12Months")
+
+                quality_score = 0.0
+                if roe and roe > 0.15:
+                    quality_score += 50
+                if operating_margins and operating_margins > 0.20:
+                    quality_score += 50
+
+                safety_score = 0.0
+                if ev_to_ebitda and ev_to_ebitda < 10:
+                    safety_score += 50
+                if price_to_book and price_to_book < 3:
+                    safety_score += 50
+
+                value_score = 0.0
+                if pe_ttm and pe_ttm < 20:
+                    value_score += 30
+                if forward_pe and forward_pe < 18:
+                    value_score += 30
+                if peg and peg < 1.5:
+                    value_score += 40
+
+                total_score = (quality_score + safety_score + value_score) / 3.0
+
+                # Compute data completeness confidence (0-100%)
+                fields_to_check = [sector, roe, operating_margins, pe_ttm, forward_pe, peg, ev_to_ebitda, price_to_book, price_to_sales]
+                if sector is None:
+                    bench_confidence = 0.0
+                else:
+                    non_null_count = sum(1 for f in fields_to_check if f is not None)
+                    total_fields = len(fields_to_check)
+                    bench_confidence = round(100 * non_null_count / total_fields, 1)
+
+                # Determine label
+                if total_score >= 70:
+                    label = "INTERESTING"
+                elif total_score >= 50:
+                    label = "EXPENSIVE"
+                elif total_score >= 30:
+                    label = "DOUBTFUL"
+                else:
+                    label = "AVOID"
+
+                conn.execute(
+                    """
+                    INSERT INTO benchmark_fundamentals
+                    (run_id, benchmark_id, ticker, sector,
+                     bench_score_total, bench_score_quality, bench_score_safety, bench_score_value,
+                     bench_confidence, fundamental_label,
+                     roe, operating_margins, pe_ttm, forward_pe, peg,
+                     ev_to_ebitda, price_to_book, price_to_sales,
+                     status, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', ?)
+                    """,
+                    (
+                        run_id,
+                        benchmark_id,
+                        ticker,
+                        sector,
+                        total_score,
+                        quality_score,
+                        safety_score,
+                        value_score,
+                        bench_confidence,
+                        label,
+                        roe,
+                        operating_margins,
+                        pe_ttm,
+                        forward_pe,
+                        peg,
+                        ev_to_ebitda,
+                        price_to_book,
+                        price_to_sales,
+                        datetime.now(timezone.utc).isoformat(),
+                    ),
+                )
+
+                if sector:
+                    conn.execute(
+                        """
+                        INSERT INTO ticker_sectors (ticker, sector)
+                        VALUES (?, ?)
+                        ON CONFLICT(ticker) DO UPDATE SET sector = excluded.sector
+                        """,
+                        (ticker, sector),
+                    )
+
+                succeeded += 1
+            except Exception:
+                failed += 1
+
+        conn.commit()
+        return {"succeeded": succeeded, "failed": failed, "run_id": run_id}
+    finally:
+        conn.close()
+
+
+def get_benchmark_snapshot_tickers(benchmark_id: int) -> list[dict]:
+    """Get latest snapshot data for all tickers in a benchmark.
+
+    Returns:
+        List of dicts with snapshot essentials for Analysis → Fundamental Finder
+    """
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT
+                bf.ticker,
+                COALESCE(bf.ticker_name, bf.company_name) as ticker_name,
+                bf.sector,
+                bf.fundamental_label,
+                bf.bench_score_total,
+                bf.bench_score_quality,
+                bf.bench_score_safety,
+                bf.bench_score_value,
+                bf.bench_sector_pct_total,
+                bf.bench_confidence,
+                bf.updated_at
+            FROM benchmark_tickers bt
+            LEFT JOIN (
+                SELECT
+                    benchmark_id,
+                    ticker,
+                    sector,
+                    fundamental_label,
+                    bench_score_total,
+                    bench_score_quality,
+                    bench_score_safety,
+                    bench_score_value,
+                    bench_sector_pct_total,
+                    bench_confidence,
+                    updated_at,
+                    NULL as ticker_name,
+                    NULL as company_name,
+                    ROW_NUMBER() OVER (PARTITION BY benchmark_id, ticker ORDER BY updated_at DESC) as rn
+                FROM benchmark_fundamentals
+                WHERE status = 'ok'
+            ) bf ON bf.benchmark_id = bt.benchmark_id AND bf.ticker = bt.ticker AND bf.rn = 1
+            WHERE bt.benchmark_id = ?
+            ORDER BY bt.ticker
+            """,
+            (benchmark_id,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_ticker_snapshot_detail(benchmark_id: int, ticker: str) -> dict | None:
+    """Get detailed snapshot data for a specific ticker.
+
+    Returns:
+        Dict with all stored fundamental fields, or None if not found
+    """
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT
+                ticker,
+                sector,
+                fundamental_label,
+                bench_score_total,
+                bench_score_quality,
+                bench_score_safety,
+                bench_score_value,
+                bench_sector_pct_total,
+                bench_sector_n,
+                bench_confidence,
+                roe,
+                operating_margins,
+                pe_ttm,
+                forward_pe,
+                peg,
+                ev_to_ebitda,
+                price_to_book,
+                price_to_sales,
+                updated_at
+            FROM benchmark_fundamentals
+            WHERE benchmark_id = ? AND ticker = ? AND status = 'ok'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (benchmark_id, ticker),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()

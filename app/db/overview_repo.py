@@ -498,3 +498,78 @@ def get_all_sector_allocations(position_values: dict[str, float]) -> list[dict[s
         })
 
     return result
+
+
+def upsert_intraday_prices(ticker: str, trading_day: str, bars: list[dict]) -> None:
+    """Upsert intraday prices for a ticker on a specific trading day.
+
+    Deletes existing rows for (ticker, trading_day) with interval='5m',
+    then inserts fresh rows in a single transaction.
+    """
+    from datetime import datetime, timezone
+
+    if not bars:
+        return
+
+    with get_connection() as conn:
+        # Delete existing intraday data
+        conn.execute(
+            """
+            DELETE FROM price_bars
+            WHERE symbol = ?
+              AND interval = '5m'
+              AND date LIKE ?
+            """,
+            (ticker, f"{trading_day}%"),
+        )
+
+        # Insert fresh intraday bars
+        for bar in bars:
+            dt = datetime.fromtimestamp(bar["ts"], tz=timezone.utc)
+            iso_date = dt.isoformat(timespec="seconds")
+            fetched_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+            conn.execute(
+                """
+                INSERT INTO price_bars (symbol, interval, date, close, fetched_at)
+                VALUES (?, '5m', ?, ?, ?)
+                """,
+                (ticker, iso_date, bar["price"], fetched_at),
+            )
+
+        conn.commit()
+
+
+def get_intraday_prices(tickers: list[str], trading_day: str) -> dict[str, list[dict]]:
+    """Get intraday prices for given tickers on a specific trading day."""
+    from datetime import datetime
+
+    if not tickers:
+        return {}
+
+    with get_connection() as conn:
+        placeholders = ",".join("?" for _ in tickers)
+        cur = conn.execute(
+            f"""
+            SELECT symbol, date, close
+            FROM price_bars
+            WHERE symbol IN ({placeholders})
+              AND interval = '5m'
+              AND date LIKE ?
+            ORDER BY symbol, date ASC
+            """,
+            (*tickers, f"{trading_day}%"),
+        )
+        rows = cur.fetchall()
+
+        result: dict[str, list[dict]] = {s: [] for s in tickers}
+        for row in rows:
+            dt = datetime.fromisoformat(row["date"])
+            unix_ts = int(dt.timestamp())
+
+            result[row["symbol"]].append({
+                "ts": unix_ts,
+                "price": row["close"],
+            })
+
+        return result
