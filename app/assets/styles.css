@@ -1286,3 +1286,177 @@ textarea::placeholder{
   margin-bottom: 6px;
   color: rgba(255,255,255,0.85);
 }
+
+
+/* ============================================================
+   Dash DataTable — Pagination patch (fix input clipping/underline)
+   ============================================================ */
+
+/* Strongly normalize the pagination wrapper */
+.dash-table-container .previous-next-container{
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;  /* looks calmer than hard-right; change to flex-end if you prefer */
+  gap: 10px !important;
+  padding: 10px 10px 8px 10px !important;
+  line-height: 1 !important;
+}
+
+/* Normalize the page-number group */
+.dash-table-container .page-number{
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  line-height: 1 !important;
+  color: rgba(255,255,255,0.70) !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+}
+
+/* Fix the current page input rendering */
+.dash-table-container input.current-page{
+  -webkit-appearance: none !important;
+  appearance: none !important;
+
+  width: 42px !important;
+  height: 32px !important;
+
+  padding: 0 !important;               /* avoid vertical clipping */
+  margin: 0 !important;
+
+  border-radius: 12px !important;
+  border: 1px solid rgba(255,255,255,0.14) !important;
+
+  background-color: rgba(255,255,255,0.06) !important;
+  background-clip: padding-box !important;
+
+  color: rgba(255,255,255,0.92) !important;
+  text-align: center !important;
+
+  font-size: 12px !important;
+  font-weight: 750 !important;
+  line-height: 32px !important;        /* critical: centers text, prevents underline artifacts */
+
+  outline: none !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05) !important;
+}
+
+/* Clean focus ring */
+.dash-table-container input.current-page:focus{
+  border-color: rgba(59,130,246,0.65) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 0 0 3px rgba(59,130,246,0.18) !important;
+}
+
+/* Ensure the slash + total pages spacing looks intentional */
+.dash-table-container .page-number::before{
+  content: "Page";
+  color: rgba(255,255,255,0.52);
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+/* Buttons: keep them circular-pill and consistent height */
+.dash-table-container button.first-page,
+.dash-table-container button.previous-page,
+.dash-table-container button.next-page,
+.dash-table-container button.last-page{
+  width: 36px !important;
+  height: 32px !important;
+  border-radius: 12px !important;
+
+  border: 1px solid rgba(255,255,255,0.14) !important;
+  background: rgba(255,255,255,0.06) !important;
+  color: rgba(255,255,255,0.86) !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  line-height: 30px !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.dash-table-container button.first-page:hover,
+.dash-table-container button.previous-page:hover,
+.dash-table-container button.next-page:hover,
+.dash-table-container button.last-page:hover{
+  background: rgba(255,255,255,0.10) !important;
+  border-color: rgba(255,255,255,0.22) !important;
+  transform: translateY(-1px);
+}
+
+.dash-table-container button.first-page:disabled,
+.dash-table-container button.previous-page:disabled,
+.dash-table-container button.next-page:disabled,
+.dash-table-container button.last-page:disabled{
+  opacity: 0.35 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
+  background: rgba(255,255,255,0.04) !important;
+  border-color: rgba(255,255,255,0.10) !important;
+}
+
+/* Prevent any inherited underline/text decoration weirdness */
+.dash-table-container .page-number,
+.dash-table-container .page-number *{
+  text-decoration: none !important;
+}
+
+/* ============================================================
+   Custom pagination buttons (Fundamental Analysis page)
+   ============================================================ */
+
+/* Hide DataTable native pagination completely (scoped to fundamental finder) */
+#fundamental-finder-table .previous-next-container{
+  display: none !important;
+}
+
+/* Custom pager container */
+.custom-pager{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* Custom pager buttons - compact dark pills */
+.custom-pager button{
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+  min-width: 36px;
+}
+
+/* Hover state - lift effect + lighter background */
+.custom-pager button:hover{
+  background: rgba(12, 30, 70, 0.75);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+
+/* Disabled state - no hover, muted appearance */
+.custom-pager button:disabled{
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.custom-pager button:disabled:hover{
+  background: var(--surface-2);
+  transform: none;
+  box-shadow: none;
+}

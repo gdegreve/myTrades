@@ -203,6 +203,28 @@ def ensure_schema() -> None:
         except Exception:
             pass  # Column already exists
 
+        # Add fundamental metrics columns to benchmark_fundamentals (idempotent)
+        # Growth & Cash Flow metrics
+        fundamental_columns = [
+            "revenue_growth_yoy REAL",
+            "eps_growth_yoy REAL",
+            "fcf_margin REAL",
+            "fcf_growth_yoy REAL",
+            "operating_cf_to_net_income REAL",
+            # Balance Sheet & Solvency metrics
+            "net_debt_to_ebitda REAL",
+            "interest_coverage REAL",
+            "current_ratio REAL",
+            "debt_to_equity REAL",
+            "shares_out_growth_yoy REAL",
+        ]
+
+        for col_def in fundamental_columns:
+            try:
+                cur.execute(f"ALTER TABLE benchmark_fundamentals ADD COLUMN {col_def}")
+            except Exception:
+                pass  # Column already exists
+
         # Benchmark EOD price cache table
         cur.execute(
             """

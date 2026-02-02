@@ -6,6 +6,56 @@ from typing import Any
 from app.db.connection import get_connection
 
 
+def migrate_add_fundamental_metrics() -> dict[str, int]:
+    """Add Growth & Cash Flow + Balance Sheet columns to benchmark_fundamentals.
+
+    This migration is idempotent (safe to run multiple times).
+    Auto-runs via ensure_schema() on app startup.
+
+    Returns:
+        Dict with keys: 'added' (number of new columns added), 'skipped' (already existed)
+    """
+    conn = get_connection()
+    try:
+        # Check existing columns first
+        cur = conn.execute("PRAGMA table_info(benchmark_fundamentals)")
+        existing_cols = {row[1] for row in cur.fetchall()}
+
+        # Define new columns
+        new_columns = {
+            # Growth & Cash Flow
+            "revenue_growth_yoy": "REAL",
+            "eps_growth_yoy": "REAL",
+            "fcf_margin": "REAL",
+            "fcf_growth_yoy": "REAL",
+            "operating_cf_to_net_income": "REAL",
+            # Balance Sheet & Solvency
+            "net_debt_to_ebitda": "REAL",
+            "interest_coverage": "REAL",
+            "current_ratio": "REAL",
+            "debt_to_equity": "REAL",
+            "shares_out_growth_yoy": "REAL",
+        }
+
+        added = 0
+        skipped = 0
+
+        for col_name, col_type in new_columns.items():
+            if col_name not in existing_cols:
+                try:
+                    conn.execute(f"ALTER TABLE benchmark_fundamentals ADD COLUMN {col_name} {col_type}")
+                    added += 1
+                except Exception:
+                    skipped += 1
+            else:
+                skipped += 1
+
+        conn.commit()
+        return {"added": added, "skipped": skipped}
+    finally:
+        conn.close()
+
+
 def list_benchmarks() -> list[dict]:
     """Return all benchmarks ordered by name.
 
@@ -380,7 +430,9 @@ def get_benchmark_tickers_with_fundamentals(benchmark_id: int) -> list[dict]:
 
     Returns:
         List of dicts with keys: ticker, sector, fundamental_label,
-        bench_score_total, bench_sector_pct_total, bench_confidence, updated_at
+        bench_score_total, bench_score_quality, bench_score_safety, bench_score_value,
+        bench_sector_pct_total, bench_confidence, roe, operating_margins,
+        pe_ttm, forward_pe, peg, ev_to_ebitda, price_to_book, price_to_sales, updated_at
     """
     conn = get_connection()
     try:
@@ -391,8 +443,19 @@ def get_benchmark_tickers_with_fundamentals(benchmark_id: int) -> list[dict]:
                 bf.sector,
                 bf.fundamental_label,
                 bf.bench_score_total,
+                bf.bench_score_quality,
+                bf.bench_score_safety,
+                bf.bench_score_value,
                 bf.bench_sector_pct_total,
                 bf.bench_confidence,
+                bf.roe,
+                bf.operating_margins,
+                bf.pe_ttm,
+                bf.forward_pe,
+                bf.peg,
+                bf.ev_to_ebitda,
+                bf.price_to_book,
+                bf.price_to_sales,
                 bf.updated_at
             FROM benchmark_tickers bt
             LEFT JOIN (
@@ -402,8 +465,19 @@ def get_benchmark_tickers_with_fundamentals(benchmark_id: int) -> list[dict]:
                     sector,
                     fundamental_label,
                     bench_score_total,
+                    bench_score_quality,
+                    bench_score_safety,
+                    bench_score_value,
                     bench_sector_pct_total,
                     bench_confidence,
+                    roe,
+                    operating_margins,
+                    pe_ttm,
+                    forward_pe,
+                    peg,
+                    ev_to_ebitda,
+                    price_to_book,
+                    price_to_sales,
                     updated_at,
                     ROW_NUMBER() OVER (PARTITION BY benchmark_id, ticker ORDER BY updated_at DESC) as rn
                 FROM benchmark_fundamentals
@@ -462,6 +536,40 @@ def refresh_benchmark_fundamentals(benchmark_id: int, tickers: list[str]) -> dic
                 price_to_book = info.get("priceToBook")
                 price_to_sales = info.get("priceToSalesTrailing12Months")
 
+                # Growth & Cash Flow metrics
+                revenue_growth_yoy = info.get("revenueGrowth")
+                eps_growth_yoy = info.get("earningsGrowth")
+
+                # FCF margin = FCF / Total Revenue
+                fcf = info.get("freeCashflow")
+                total_revenue = info.get("totalRevenue")
+                fcf_margin = (fcf / total_revenue) if (fcf and total_revenue and total_revenue != 0) else None
+
+                # FCF growth - yfinance doesn't provide directly, set to None for now
+                fcf_growth_yoy = None
+
+                # Operating CF to Net Income (earnings quality)
+                operating_cf = info.get("operatingCashflow")
+                net_income = info.get("netIncomeToCommon")
+                operating_cf_to_net_income = (operating_cf / net_income) if (operating_cf and net_income and net_income != 0) else None
+
+                # Balance Sheet & Solvency metrics
+                total_debt = info.get("totalDebt", 0)
+                cash = info.get("cash", 0)
+                ebitda = info.get("ebitda")
+                net_debt_to_ebitda = ((total_debt - cash) / ebitda) if ebitda and ebitda != 0 else None
+
+                # Interest coverage = EBIT / Interest Expense
+                ebit = info.get("ebit")
+                interest_expense = info.get("interestExpense")
+                interest_coverage = (ebit / interest_expense) if (ebit and interest_expense and interest_expense != 0) else None
+
+                current_ratio = info.get("currentRatio")
+                debt_to_equity = info.get("debtToEquity")
+
+                # Shares outstanding growth - not directly available, set to None for now
+                shares_out_growth_yoy = None
+
                 quality_score = 0.0
                 if roe and roe > 0.15:
                     quality_score += 50
@@ -511,8 +619,10 @@ def refresh_benchmark_fundamentals(benchmark_id: int, tickers: list[str]) -> dic
                      bench_confidence, fundamental_label,
                      roe, operating_margins, pe_ttm, forward_pe, peg,
                      ev_to_ebitda, price_to_book, price_to_sales,
+                     revenue_growth_yoy, eps_growth_yoy, fcf_margin, fcf_growth_yoy, operating_cf_to_net_income,
+                     net_debt_to_ebitda, interest_coverage, current_ratio, debt_to_equity, shares_out_growth_yoy,
                      status, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ok', ?)
                     """,
                     (
                         run_id,
@@ -533,6 +643,16 @@ def refresh_benchmark_fundamentals(benchmark_id: int, tickers: list[str]) -> dic
                         ev_to_ebitda,
                         price_to_book,
                         price_to_sales,
+                        revenue_growth_yoy,
+                        eps_growth_yoy,
+                        fcf_margin,
+                        fcf_growth_yoy,
+                        operating_cf_to_net_income,
+                        net_debt_to_ebitda,
+                        interest_coverage,
+                        current_ratio,
+                        debt_to_equity,
+                        shares_out_growth_yoy,
                         datetime.now(timezone.utc).isoformat(),
                     ),
                 )
@@ -638,6 +758,16 @@ def get_ticker_snapshot_detail(benchmark_id: int, ticker: str) -> dict | None:
                 ev_to_ebitda,
                 price_to_book,
                 price_to_sales,
+                revenue_growth_yoy,
+                eps_growth_yoy,
+                fcf_margin,
+                fcf_growth_yoy,
+                operating_cf_to_net_income,
+                net_debt_to_ebitda,
+                interest_coverage,
+                current_ratio,
+                debt_to_equity,
+                shares_out_growth_yoy,
                 updated_at
             FROM benchmark_fundamentals
             WHERE benchmark_id = ? AND ticker = ? AND status = 'ok'
