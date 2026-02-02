@@ -161,6 +161,7 @@ def layout() -> html.Div:
             dcc.Store(id="fund-ai-payload", data=None),
             dcc.Store(id="fund-finder-page", data=0),
             dcc.Store(id="fundamentals-finder-store", data=None),
+            dcc.Store(id="fundamental-active-tab", data="finder"),
 
             # Page header
             html.Div(
@@ -178,30 +179,66 @@ def layout() -> html.Div:
                     html.Div(
                         className="page-header-actions",
                         children=[
+                            # Finder controls (visible by default)
                             html.Div(
+                                id="fund-header-finder",
+                                style={"display": "flex", "gap": "20px"},
                                 children=[
-                                    html.Div("Benchmark", className="field-label"),
-                                    dcc.Dropdown(
-                                        id="fundamental-benchmark",
-                                        options=[],
-                                        value=None,
-                                        placeholder="Select benchmark",
-                                        clearable=True,
-                                        style={"minWidth": "220px"},
+                                    html.Div(
+                                        children=[
+                                            html.Div("Benchmark", className="field-label"),
+                                            dcc.Dropdown(
+                                                id="fundamental-benchmark",
+                                                options=[],
+                                                value=None,
+                                                placeholder="Select benchmark",
+                                                clearable=True,
+                                                style={"minWidth": "220px"},
+                                            ),
+                                        ]
                                     ),
-                                ]
+                                    html.Div(
+                                        children=[
+                                            html.Div("Search", className="field-label"),
+                                            dcc.Input(
+                                                id="fund-finder-search",
+                                                type="text",
+                                                placeholder="Search ticker, name, sector, label…",
+                                                debounce=True,
+                                                style={"minWidth": "280px"},
+                                            ),
+                                        ]
+                                    ),
+                                ],
                             ),
+                            # Breakdown controls (hidden by default)
                             html.Div(
+                                id="fund-header-breakdown",
+                                style={"display": "none"},
                                 children=[
-                                    html.Div("Search", className="field-label"),
-                                    dcc.Input(
-                                        id="fund-finder-search",
-                                        type="text",
-                                        placeholder="Search ticker, name, sector, label…",
-                                        debounce=True,
-                                        style={"minWidth": "280px"},
+                                    html.Div(
+                                        children=[
+                                            html.Div("Manual Ticker", className="field-label"),
+                                            dcc.Input(
+                                                id="fund-breakdown-ticker-input",
+                                                type="text",
+                                                placeholder="Enter ticker (e.g., AAPL)",
+                                                style={"minWidth": "160px"},
+                                            ),
+                                        ]
                                     ),
-                                ]
+                                    html.Div(
+                                        children=[
+                                            html.Div(style={"height": "20px"}),  # Spacer for alignment
+                                            html.Button(
+                                                "Load",
+                                                id="fund-breakdown-load-btn",
+                                                className="btn-secondary",
+                                                style={"marginTop": "0px"},
+                                            ),
+                                        ]
+                                    ),
+                                ],
                             ),
                         ],
                     ),
@@ -337,6 +374,20 @@ def populate_benchmark_dropdown(pathname):
 
     benchmarks = list_benchmarks()
     return [{"label": bm["name"], "value": bm["benchmark_id"]} for bm in benchmarks]
+
+
+# Callback: toggle header actions based on active tab
+@callback(
+    Output("fund-header-finder", "style"),
+    Output("fund-header-breakdown", "style"),
+    Input("fundamental-active-tab", "data"),
+)
+def toggle_header_actions(active_tab):
+    """Show/hide header actions based on active tab."""
+    if active_tab == "finder":
+        return {"display": "flex", "gap": "20px"}, {"display": "none"}
+    else:  # breakdown
+        return {"display": "none"}, {"display": "flex", "gap": "20px"}
 
 
 # Callback: load finder table (store full dataset)
@@ -567,6 +618,7 @@ def render_finder_table(store_data, page_current, page_size, sort_by):
     Output("fundamental-nav-breakdown", "active"),
     Output("fundamental-nav-finder", "style"),
     Output("fundamental-nav-breakdown", "style"),
+    Output("fundamental-active-tab", "data"),
     Input("fundamental-nav-finder", "n_clicks"),
     Input("fundamental-nav-breakdown", "n_clicks"),
     prevent_initial_call=True,
@@ -587,6 +639,7 @@ def toggle_panels(finder_clicks, breakdown_clicks):
             False,
             PILL_ACTIVE_STYLE,
             PILL_INACTIVE_STYLE,
+            "finder",
         )
     elif button_id == "fundamental-nav-breakdown":
         return (
@@ -596,6 +649,7 @@ def toggle_panels(finder_clicks, breakdown_clicks):
             True,
             PILL_INACTIVE_STYLE,
             PILL_ACTIVE_STYLE,
+            "breakdown",
         )
     else:
         raise PreventUpdate
@@ -610,6 +664,7 @@ def toggle_panels(finder_clicks, breakdown_clicks):
     Output("fundamental-nav-breakdown", "active", allow_duplicate=True),
     Output("fundamental-nav-finder", "style", allow_duplicate=True),
     Output("fundamental-nav-breakdown", "style", allow_duplicate=True),
+    Output("fundamental-active-tab", "data", allow_duplicate=True),
     Input("fundamental-finder-table", "active_cell"),
     State("fundamental-finder-table", "data"),
     prevent_initial_call=True,
@@ -633,7 +688,30 @@ def click_ticker_to_open(active_cell, data):
         True,
         PILL_INACTIVE_STYLE,
         PILL_ACTIVE_STYLE,
+        "breakdown",
     )
+
+
+# Callback: load manually entered ticker
+@callback(
+    Output("fundamental-active-ticker", "data", allow_duplicate=True),
+    Input("fund-breakdown-load-btn", "n_clicks"),
+    State("fund-breakdown-ticker-input", "value"),
+    prevent_initial_call=True,
+)
+def load_manual_ticker(n_clicks, ticker_input):
+    """Load breakdown for manually entered ticker."""
+    if not ticker_input or not ticker_input.strip():
+        raise PreventUpdate
+
+    # Clean and validate ticker
+    ticker = ticker_input.strip().upper()
+
+    # Basic validation: alphanumeric, dots, dashes (e.g., BRK.B, BRK-B)
+    if not re.match(r'^[A-Z0-9.\-]+$', ticker):
+        raise PreventUpdate
+
+    return ticker
 
 
 # Callback: load breakdown content
@@ -644,12 +722,21 @@ def click_ticker_to_open(active_cell, data):
     State("fundamental-benchmark", "value"),
 )
 def load_breakdown(ticker, benchmark_id):
-    if not ticker or not benchmark_id:
+    if not ticker:
         return html.Div(
             className="card",
             children=[
                 html.Div("No Ticker Selected", className="card-title"),
-                html.P("Select a ticker from Finder to view details."),
+                html.P("Select a ticker from Finder or enter one manually."),
+            ],
+        ), None
+
+    if not benchmark_id:
+        return html.Div(
+            className="card",
+            children=[
+                html.Div(f"{ticker}", className="card-title"),
+                html.P("Please select a benchmark first from the Finder tab."),
             ],
         ), None
 
