@@ -127,7 +127,7 @@ def build_signal_trade_targets(
 
         if trade:
             # Add stop price suggestion
-            if trade["shares_delta"] != 0:
+            if trade.get("delta_shares", 0) != 0:
                 stop_data = _compute_stop_suggestion(
                     ticker=ticker,
                     last_close=prices.get(ticker, 0.0),
