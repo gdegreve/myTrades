@@ -774,7 +774,7 @@ def load_rebalance_data(portfolio_id, mode):
         children=[
             html.Div(f"Cash: €{cash_balance:,.2f}", style={"marginBottom": "6px"}),
             html.Div(f"Positions: {len(positions)}", style={"marginBottom": "6px"}),
-            html.Div(f"Signals: {len(signals)}", style={"marginBottom": "6px"}),
+            html.Div(f"Signals: {len(signals_list)}", style={"marginBottom": "6px"}),
         ]
     )
 
