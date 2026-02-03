@@ -508,8 +508,7 @@ def layout() -> html.Div:
                             {"name": "Curr Price", "id": "curr_price", "type": "numeric"},
                             {"name": "Daily P/L", "id": "daily_pnl", "type": "numeric"},
                             {"name": "Daily %", "id": "daily_pct", "type": "numeric"},
-                            {"name": "Total % (no comm)", "id": "total_pnl_pct_no_comm", "type": "numeric"},
-                            {"name": "Total % (with comm)", "id": "total_pnl_pct_with_comm", "type": "numeric"},
+                            {"name": "Total P/L %", "id": "total_pnl_pct", "type": "numeric"},
                             {"name": "Trend", "id": "trend", "presentation": "markdown"},
                         ],
                         data=[],
@@ -549,29 +548,15 @@ def layout() -> html.Div:
                             },
                             {
                                 "if": {
-                                    "filter_query": "{total_pnl_pct_no_comm} > 0",
-                                    "column_id": "total_pnl_pct_no_comm"
+                                    "filter_query": "{total_pnl_pct} > 0",
+                                    "column_id": "total_pnl_pct"
                                 },
                                 "color": "#28a745",
                             },
                             {
                                 "if": {
-                                    "filter_query": "{total_pnl_pct_no_comm} < 0",
-                                    "column_id": "total_pnl_pct_no_comm"
-                                },
-                                "color": "#dc3545",
-                            },
-                            {
-                                "if": {
-                                    "filter_query": "{total_pnl_pct_with_comm} > 0",
-                                    "column_id": "total_pnl_pct_with_comm"
-                                },
-                                "color": "#28a745",
-                            },
-                            {
-                                "if": {
-                                    "filter_query": "{total_pnl_pct_with_comm} < 0",
-                                    "column_id": "total_pnl_pct_with_comm"
+                                    "filter_query": "{total_pnl_pct} < 0",
+                                    "column_id": "total_pnl_pct"
                                 },
                                 "color": "#dc3545",
                             },
@@ -1129,21 +1114,16 @@ def refresh_overview_data(portfolio_id):
             daily_pnl = shares * (curr_price - prev_price)
             daily_pct = ((curr_price - prev_price) / prev_price) * 100 if prev_price > 0 else 0
 
-            # Calculate all-time P/L %
-            total_pnl_pct_no_comm = 0.0
-            total_pnl_pct_with_comm = 0.0
+            # Calculate all-time P/L % (with commission)
+            total_pnl_pct = 0.0
 
             if ticker in cost_basis_map:
                 cost_data = cost_basis_map[ticker]
                 current_value = shares * curr_price
 
-                # P/L % without commission
-                if cost_data["cost_no_comm"] > 0:
-                    total_pnl_pct_no_comm = ((current_value - cost_data["cost_no_comm"]) / cost_data["cost_no_comm"]) * 100
-
-                # P/L % with commission
+                # P/L % with commission (true cost basis)
                 if cost_data["cost_with_comm"] > 0:
-                    total_pnl_pct_with_comm = ((current_value - cost_data["cost_with_comm"]) / cost_data["cost_with_comm"]) * 100
+                    total_pnl_pct = ((current_value - cost_data["cost_with_comm"]) / cost_data["cost_with_comm"]) * 100
 
             contributors_data.append({
                 "ticker": ticker,
@@ -1152,8 +1132,7 @@ def refresh_overview_data(portfolio_id):
                 "curr_price": round(curr_price, 2),
                 "daily_pnl": round(daily_pnl, 2),
                 "daily_pct": round(daily_pct, 2),
-                "total_pnl_pct_no_comm": round(total_pnl_pct_no_comm, 2),
-                "total_pnl_pct_with_comm": round(total_pnl_pct_with_comm, 2),
+                "total_pnl_pct": round(total_pnl_pct, 2),
             })
 
     # Sort by absolute P/L (show all, no top-5 limit)
