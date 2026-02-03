@@ -508,6 +508,8 @@ def layout() -> html.Div:
                             {"name": "Curr Price", "id": "curr_price", "type": "numeric"},
                             {"name": "Daily P/L", "id": "daily_pnl", "type": "numeric"},
                             {"name": "Daily %", "id": "daily_pct", "type": "numeric"},
+                            {"name": "Total % (no comm)", "id": "total_pnl_pct_no_comm", "type": "numeric"},
+                            {"name": "Total % (with comm)", "id": "total_pnl_pct_with_comm", "type": "numeric"},
                             {"name": "Trend", "id": "trend", "presentation": "markdown"},
                         ],
                         data=[],
@@ -542,6 +544,34 @@ def layout() -> html.Div:
                                 "if": {
                                     "filter_query": "{daily_pct} < 0",
                                     "column_id": "daily_pct"
+                                },
+                                "color": "#dc3545",
+                            },
+                            {
+                                "if": {
+                                    "filter_query": "{total_pnl_pct_no_comm} > 0",
+                                    "column_id": "total_pnl_pct_no_comm"
+                                },
+                                "color": "#28a745",
+                            },
+                            {
+                                "if": {
+                                    "filter_query": "{total_pnl_pct_no_comm} < 0",
+                                    "column_id": "total_pnl_pct_no_comm"
+                                },
+                                "color": "#dc3545",
+                            },
+                            {
+                                "if": {
+                                    "filter_query": "{total_pnl_pct_with_comm} > 0",
+                                    "column_id": "total_pnl_pct_with_comm"
+                                },
+                                "color": "#28a745",
+                            },
+                            {
+                                "if": {
+                                    "filter_query": "{total_pnl_pct_with_comm} < 0",
+                                    "column_id": "total_pnl_pct_with_comm"
                                 },
                                 "color": "#dc3545",
                             },
@@ -1058,6 +1088,35 @@ def refresh_overview_data(portfolio_id):
         sectors_fig = _create_empty_figure("No sector data")
 
     # ========== TOP CONTRIBUTORS TABLE ==========
+    # First, get cost basis data for each position
+    from app.db.connection import get_connection
+    cost_basis_map = {}
+
+    with get_connection() as conn:
+        for p in positions:
+            ticker = p["ticker"]
+            # Calculate cost basis with and without commission
+            rows = conn.execute(
+                """
+                SELECT
+                    SUM(CASE WHEN transaction_type = 'buy' THEN shares * price ELSE 0 END) as cost_no_comm,
+                    SUM(CASE WHEN transaction_type = 'buy' THEN commission ELSE 0 END) as total_commission
+                FROM transactions
+                WHERE portfolio_id = ? AND ticker = ?
+                """,
+                (portfolio_id, ticker)
+            ).fetchone()
+
+            if rows:
+                cost_no_comm = rows["cost_no_comm"] or 0.0
+                total_commission = rows["total_commission"] or 0.0
+                cost_with_comm = cost_no_comm + total_commission
+
+                cost_basis_map[ticker] = {
+                    "cost_no_comm": cost_no_comm,
+                    "cost_with_comm": cost_with_comm,
+                }
+
     contributors_data = []
 
     for p in positions:
@@ -1070,6 +1129,22 @@ def refresh_overview_data(portfolio_id):
             daily_pnl = shares * (curr_price - prev_price)
             daily_pct = ((curr_price - prev_price) / prev_price) * 100 if prev_price > 0 else 0
 
+            # Calculate all-time P/L %
+            total_pnl_pct_no_comm = 0.0
+            total_pnl_pct_with_comm = 0.0
+
+            if ticker in cost_basis_map:
+                cost_data = cost_basis_map[ticker]
+                current_value = shares * curr_price
+
+                # P/L % without commission
+                if cost_data["cost_no_comm"] > 0:
+                    total_pnl_pct_no_comm = ((current_value - cost_data["cost_no_comm"]) / cost_data["cost_no_comm"]) * 100
+
+                # P/L % with commission
+                if cost_data["cost_with_comm"] > 0:
+                    total_pnl_pct_with_comm = ((current_value - cost_data["cost_with_comm"]) / cost_data["cost_with_comm"]) * 100
+
             contributors_data.append({
                 "ticker": ticker,
                 "shares": round(shares, 2),
@@ -1077,6 +1152,8 @@ def refresh_overview_data(portfolio_id):
                 "curr_price": round(curr_price, 2),
                 "daily_pnl": round(daily_pnl, 2),
                 "daily_pct": round(daily_pct, 2),
+                "total_pnl_pct_no_comm": round(total_pnl_pct_no_comm, 2),
+                "total_pnl_pct_with_comm": round(total_pnl_pct_with_comm, 2),
             })
 
     # Sort by absolute P/L (show all, no top-5 limit)
