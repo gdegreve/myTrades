@@ -658,8 +658,24 @@ def load_rebalance_data(portfolio_id, mode):
         # Convert signal sizing trades to plan format
         signal_trades = []
         for trade in signal_trade_targets:
-            if not trade.get("skipped", False) and trade.get("delta_shares", 0) != 0:
-                price = prices.get(trade["ticker"], 0.0)
+            price = prices.get(trade["ticker"], 0.0)
+
+            # Include both active and skipped trades (so user can see why trades are skipped)
+            if trade.get("skipped", False):
+                # Show skipped trade with reason
+                signal_trades.append({
+                    "ticker": trade["ticker"],
+                    "layer": "Skipped",
+                    "signal": trade.get("signal", "HOLD"),
+                    "shares_delta": 0,
+                    "price": price,
+                    "estimated_eur": 0.0,
+                    "reason": f"⚠️ {trade.get('reason', 'Skipped')}",
+                    "stop_price": None,
+                    "limit_price": None,
+                })
+            elif trade.get("delta_shares", 0) != 0:
+                # Active trade
                 signal_trades.append({
                     "ticker": trade["ticker"],
                     "layer": "Signal",
