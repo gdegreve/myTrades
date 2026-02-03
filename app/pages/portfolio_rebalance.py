@@ -18,9 +18,11 @@ from app.db.rebalance_repo import (
     update_ai_job,
     get_signals_for_portfolio,
 )
+from app.db.strategy_repo import get_assignment_map, get_saved_strategy_by_id
 from app.domain.ledger import compute_positions, compute_cash_balance
 from app.domain.rebalance import compute_full_rebalance_plan
 from app.services.market_data import get_latest_daily_closes_cached
+from app.services.signal_sizing_service import build_signal_trade_targets
 
 
 def _safe_float(value, default=0.0):
@@ -345,6 +347,8 @@ def layout() -> html.Div:
                                     {"name": "Shares Δ", "id": "shares_delta", "type": "numeric"},
                                     {"name": "Price", "id": "price", "type": "numeric"},
                                     {"name": "Est. EUR", "id": "estimated_eur", "type": "numeric"},
+                                    {"name": "Stop", "id": "stop_price", "type": "numeric"},
+                                    {"name": "Limit", "id": "limit_price", "type": "numeric"},
                                     {"name": "Reason", "id": "reason"},
                                 ],
                                 data=[],
@@ -554,6 +558,7 @@ def load_rebalance_data(portfolio_id, mode):
 
     This is the main data-loading callback for the rebalance page.
     It orchestrates calls to the domain layer to compute the full rebalance plan.
+    Now with signal sizing policy integration.
     """
     if portfolio_id is None:
         raise PreventUpdate
@@ -570,13 +575,25 @@ def load_rebalance_data(portfolio_id, mode):
 
     # Load policy
     policy_snapshot = load_policy_snapshot(portfolio_id)
+    policy = policy_snapshot.get("policy", {})
 
     # Load signals
-    signals = get_signals_for_portfolio(portfolio_id)
+    signals_list = get_signals_for_portfolio(portfolio_id)
+
+    # Convert signals list to dict format for signal sizing service
+    signals_dict = {}
+    for sig in signals_list:
+        ticker = sig["ticker"]
+        signals_dict[ticker] = {
+            "signal": sig.get("signal", "HOLD"),
+            "strength": 1,  # Default, could be parsed from meta_json
+            "confidence": 1.0,
+            "reason": sig.get("reason", ""),
+        }
 
     # Get latest prices
     position_tickers = [p["ticker"] for p in positions]
-    signal_tickers = [s["ticker"] for s in signals]
+    signal_tickers = [s["ticker"] for s in signals_list]
     all_tickers = list(set(position_tickers + signal_tickers))
 
     prices, missing_tickers = get_latest_daily_closes_cached(
@@ -593,15 +610,93 @@ def load_rebalance_data(portfolio_id, mode):
             "region": ticker_regions.get(ticker, "Unknown"),
         }
 
-    # Compute full rebalance plan
-    plan = compute_full_rebalance_plan(
-        positions=positions,
-        cash=cash_balance,
-        policy_snapshot=policy_snapshot,
-        signals=signals,
-        prices=prices,
-        ticker_metadata=ticker_metadata,
-    )
+    # Check if signal sizing is enabled
+    signal_sizing_mode = policy.get("signal_sizing_mode", "off")
+
+    # If signal sizing is enabled, use signal sizing service instead of old compute_signal_trades
+    if signal_sizing_mode != "off":
+        # Load strategy assignments
+        assignment_map = get_assignment_map(portfolio_id)
+
+        # Build saved strategy map
+        saved_strategy_map = {}
+        for ticker, saved_strategy_id in assignment_map.items():
+            strategy = get_saved_strategy_by_id(portfolio_id, saved_strategy_id)
+            if strategy:
+                saved_strategy_map[saved_strategy_id] = strategy
+
+        # Compute NAV
+        nav_eur = cash_balance
+        for pos in positions:
+            price = prices.get(pos["ticker"], pos.get("avg_cost", 0.0))
+            nav_eur += pos["shares"] * price
+
+        # Build holdings rows for signal sizing service
+        holdings_rows = []
+        for pos in positions:
+            price = prices.get(pos["ticker"], pos.get("avg_cost", 0.0))
+            value = pos["shares"] * price
+            holdings_rows.append({
+                "ticker": pos["ticker"],
+                "shares": pos["shares"],
+                "value": value,
+            })
+
+        # Call signal sizing service
+        signal_trade_targets = build_signal_trade_targets(
+            portfolio_id=portfolio_id,
+            holdings_rows=holdings_rows,
+            nav_eur=nav_eur,
+            prices=prices,
+            signals=signals_dict,
+            assignment_map=assignment_map,
+            saved_strategy_map=saved_strategy_map,
+            policy=policy,
+            ohlcv_data=None,  # TODO: Optionally load OHLCV for ATR calculation
+        )
+
+        # Convert signal sizing trades to plan format
+        signal_trades = []
+        for trade in signal_trade_targets:
+            if not trade.get("skipped", False) and trade.get("delta_shares", 0) != 0:
+                price = prices.get(trade["ticker"], 0.0)
+                signal_trades.append({
+                    "ticker": trade["ticker"],
+                    "layer": "Signal",
+                    "signal": trade.get("signal", "HOLD"),
+                    "shares_delta": trade["delta_shares"],
+                    "price": price,
+                    "estimated_eur": trade.get("delta_value_eur", 0.0),
+                    "reason": trade.get("reason", ""),
+                    "stop_price": trade.get("stop_price"),
+                    "limit_price": trade.get("limit_price"),
+                })
+
+        # Use modified compute_full_rebalance_plan with our signal trades
+        # For now, we'll use the standard plan but replace signal_trades
+        plan = compute_full_rebalance_plan(
+            positions=positions,
+            cash=cash_balance,
+            policy_snapshot=policy_snapshot,
+            signals=signals_list,
+            prices=prices,
+            ticker_metadata=ticker_metadata,
+        )
+
+        # Replace signal trades with our sizing-based trades
+        plan["signal_trades"] = signal_trades
+        plan["all_trades"] = signal_trades + plan["compensation_trades"]
+
+    else:
+        # Use standard rebalance plan
+        plan = compute_full_rebalance_plan(
+            positions=positions,
+            cash=cash_balance,
+            policy_snapshot=policy_snapshot,
+            signals=signals_list,
+            prices=prices,
+            ticker_metadata=ticker_metadata,
+        )
 
     # Determine which trades to display based on mode
     if mode == "signals_only":
@@ -631,6 +726,11 @@ def load_rebalance_data(portfolio_id, mode):
     for trade in trades_to_display:
         ticker = trade["ticker"]
         meta = ticker_metadata.get(ticker, {})
+
+        # Format stop/limit prices
+        stop_price_str = f"{trade['stop_price']:.2f}" if trade.get("stop_price") else "-"
+        limit_price_str = f"{trade['limit_price']:.2f}" if trade.get("limit_price") else "-"
+
         trades_table_data.append({
             "layer": trade["layer"],
             "ticker": ticker,
@@ -640,6 +740,8 @@ def load_rebalance_data(portfolio_id, mode):
             "shares_delta": trade["shares_delta"],
             "price": f"{trade['price']:.2f}",
             "estimated_eur": f"{trade['estimated_eur']:.2f}",
+            "stop_price": stop_price_str,
+            "limit_price": limit_price_str,
             "reason": trade["reason"],
         })
 
@@ -688,7 +790,9 @@ def load_rebalance_data(portfolio_id, mode):
     )
 
     # Status bar
-    status_msg = f"Loaded {len(signals)} signals, {len(trades_to_display)} trades planned"
+    status_msg = f"Loaded {len(signals_list)} signals, {len(trades_to_display)} trades planned"
+    if signal_sizing_mode != "off":
+        status_msg += f" | Signal sizing: {signal_sizing_mode}"
     if missing_tickers:
         status_msg += f" | {len(missing_tickers)} tickers missing prices"
 

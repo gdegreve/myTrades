@@ -50,7 +50,18 @@ def load_policy_snapshot(portfolio_id: int) -> dict[str, Any]:
                     max_sector_pct,
                     rebalance_freq,
                     drift_trigger_pct,
-                    rebalance_method
+                    rebalance_method,
+                    signal_sizing_mode,
+                    signal_step_pct,
+                    signal_strong_step_pct,
+                    signal_exit_threshold_pct,
+                    signal_min_trade_eur,
+                    signal_risk_per_trade_pct,
+                    signal_atr_period,
+                    signal_atr_mult,
+                    signal_stop_source,
+                    signal_stop_order_type,
+                    signal_stop_limit_buffer_bps
                 FROM portfolio_policy
                 WHERE portfolio_id=?
                 """,
@@ -174,8 +185,19 @@ def save_policy_snapshot(
                 rebalance_freq,
                 drift_trigger_pct,
                 rebalance_method,
+                signal_sizing_mode,
+                signal_step_pct,
+                signal_strong_step_pct,
+                signal_exit_threshold_pct,
+                signal_min_trade_eur,
+                signal_risk_per_trade_pct,
+                signal_atr_period,
+                signal_atr_mult,
+                signal_stop_source,
+                signal_stop_order_type,
+                signal_stop_limit_buffer_bps,
                 updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             ON CONFLICT(portfolio_id) DO UPDATE SET
                 benchmark_ticker = excluded.benchmark_ticker,
                 risk_profile = excluded.risk_profile,
@@ -187,6 +209,17 @@ def save_policy_snapshot(
                 rebalance_freq = excluded.rebalance_freq,
                 drift_trigger_pct = excluded.drift_trigger_pct,
                 rebalance_method = excluded.rebalance_method,
+                signal_sizing_mode = excluded.signal_sizing_mode,
+                signal_step_pct = excluded.signal_step_pct,
+                signal_strong_step_pct = excluded.signal_strong_step_pct,
+                signal_exit_threshold_pct = excluded.signal_exit_threshold_pct,
+                signal_min_trade_eur = excluded.signal_min_trade_eur,
+                signal_risk_per_trade_pct = excluded.signal_risk_per_trade_pct,
+                signal_atr_period = excluded.signal_atr_period,
+                signal_atr_mult = excluded.signal_atr_mult,
+                signal_stop_source = excluded.signal_stop_source,
+                signal_stop_order_type = excluded.signal_stop_order_type,
+                signal_stop_limit_buffer_bps = excluded.signal_stop_limit_buffer_bps,
                 updated_at = excluded.updated_at
             """,
             (
@@ -201,6 +234,17 @@ def save_policy_snapshot(
                 policy.get("rebalance_freq"),
                 policy.get("drift_trigger_pct"),
                 policy.get("rebalance_method"),
+                policy.get("signal_sizing_mode", "off"),
+                policy.get("signal_step_pct", 1.0),
+                policy.get("signal_strong_step_pct", 2.0),
+                policy.get("signal_exit_threshold_pct", 0.5),
+                policy.get("signal_min_trade_eur", 250.0),
+                policy.get("signal_risk_per_trade_pct", 0.5),
+                policy.get("signal_atr_period", 14),
+                policy.get("signal_atr_mult", 2.0),
+                policy.get("signal_stop_source", "strategy_stop"),
+                policy.get("signal_stop_order_type", "stop_limit"),
+                policy.get("signal_stop_limit_buffer_bps", 25.0),
             ),
         )
 

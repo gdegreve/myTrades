@@ -433,6 +433,206 @@ def layout() -> html.Div:
                             ),
                         ],
                     ),
+                    # Signal sizing policy card
+                    html.Div(
+                        className="card",
+                        style={"marginTop": "14px"},
+                        children=[
+                            html.Div("Signal sizing policy", className="card-title"),
+                            # Sizing mode selector
+                            html.Div(
+                                children=[
+                                    html.Div("Sizing mode", className="field-label"),
+                                    dbc.Select(
+                                        id="design-signal-sizing-mode",
+                                        options=[
+                                            {"label": "Off (drift only)", "value": "off"},
+                                            {"label": "Rule A – Step-based", "value": "step"},
+                                            {"label": "Rule B – Risk/ATR-based", "value": "risk_atr"},
+                                        ],
+                                        value="off",
+                                    ),
+                                ],
+                                style={"marginBottom": "14px"},
+                            ),
+                            # Rule A parameters (step-based)
+                            html.Div(
+                                id="design-signal-rule-a-params",
+                                style={"display": "none"},
+                                children=[
+                                    html.Div("Rule A – Step-based parameters", style={"fontWeight": "600", "marginBottom": "8px"}),
+                                    html.Div(
+                                        className="grid-2",
+                                        children=[
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Step size (% of portfolio)", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-signal-step-pct",
+                                                        type="number",
+                                                        value=1.0,
+                                                        min=0,
+                                                        max=100,
+                                                        step=0.25,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Strong step size (%)", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-signal-strong-step-pct",
+                                                        type="number",
+                                                        value=2.0,
+                                                        min=0,
+                                                        max=100,
+                                                        step=0.25,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Exit if position < (%)", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-signal-exit-threshold-pct",
+                                                        type="number",
+                                                        value=0.5,
+                                                        min=0,
+                                                        max=100,
+                                                        step=0.1,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Min trade value (EUR)", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-signal-min-trade-eur",
+                                                        type="number",
+                                                        value=250,
+                                                        min=0,
+                                                        step=50,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            # Rule B parameters (risk/ATR-based)
+                            html.Div(
+                                id="design-signal-rule-b-params",
+                                style={"display": "none"},
+                                children=[
+                                    html.Div("Rule B – Risk/ATR-based parameters", style={"fontWeight": "600", "marginBottom": "8px"}),
+                                    html.Div(
+                                        className="grid-2",
+                                        children=[
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Risk per trade (% of NAV)", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-signal-risk-per-trade-pct",
+                                                        type="number",
+                                                        value=0.5,
+                                                        min=0,
+                                                        max=10,
+                                                        step=0.05,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("ATR period", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-signal-atr-period",
+                                                        type="number",
+                                                        value=14,
+                                                        min=5,
+                                                        max=100,
+                                                        step=1,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("ATR stop multiple", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-signal-atr-mult",
+                                                        type="number",
+                                                        value=2.0,
+                                                        min=0.5,
+                                                        max=10,
+                                                        step=0.25,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Stop source", className="field-label"),
+                                                    dbc.Select(
+                                                        id="design-signal-stop-source",
+                                                        options=[
+                                                            {"label": "Strategy stop", "value": "strategy_stop"},
+                                                            {"label": "ATR-based", "value": "atr"},
+                                                        ],
+                                                        value="strategy_stop",
+                                                    ),
+                                                ]
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            # Stop order settings (shown for both Rule A and Rule B)
+                            html.Div(
+                                id="design-signal-stop-settings",
+                                style={"display": "none", "marginTop": "14px"},
+                                children=[
+                                    html.Div("Stop order settings", style={"fontWeight": "600", "marginBottom": "8px"}),
+                                    html.Div(
+                                        className="grid-2",
+                                        children=[
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Stop order type", className="field-label"),
+                                                    dbc.Select(
+                                                        id="design-signal-stop-order-type",
+                                                        options=[
+                                                            {"label": "Stop", "value": "stop"},
+                                                            {"label": "Stop-Limit", "value": "stop_limit"},
+                                                        ],
+                                                        value="stop_limit",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Div(
+                                                children=[
+                                                    html.Div("Stop-limit buffer (bps)", className="field-label"),
+                                                    dcc.Input(
+                                                        id="design-signal-stop-limit-buffer-bps",
+                                                        type="number",
+                                                        value=25,
+                                                        min=0,
+                                                        max=500,
+                                                        step=5,
+                                                        className="text-input",
+                                                    ),
+                                                ]
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
                 ],
             ),
 
@@ -540,6 +740,23 @@ def toggle_design_panels(sector_clicks, region_clicks, policy_clicks):
     )
 
 
+# Callback: toggle Rule A/B parameter visibility based on sizing mode
+@callback(
+    Output("design-signal-rule-a-params", "style"),
+    Output("design-signal-rule-b-params", "style"),
+    Output("design-signal-stop-settings", "style"),
+    Input("design-signal-sizing-mode", "value"),
+)
+def toggle_signal_sizing_params(mode: str):
+    """Show/hide signal sizing parameter sections based on selected mode."""
+    if mode == "step":
+        return {"display": "block"}, {"display": "none"}, {"display": "block"}
+    elif mode == "risk_atr":
+        return {"display": "none"}, {"display": "block"}, {"display": "block"}
+    else:  # "off"
+        return {"display": "none"}, {"display": "none"}, {"display": "none"}
+
+
 # Callback 2: load policy + targets for selected portfolio (single source of truth for design-status-bar)
 @callback(
     Output("design-benchmark", "value"),
@@ -552,6 +769,17 @@ def toggle_design_panels(sector_clicks, region_clicks, policy_clicks):
     Output("design-rebalance-freq", "value"),
     Output("design-drift-trigger", "value"),
     Output("design-rebalance-method", "value"),
+    Output("design-signal-sizing-mode", "value"),
+    Output("design-signal-step-pct", "value"),
+    Output("design-signal-strong-step-pct", "value"),
+    Output("design-signal-exit-threshold-pct", "value"),
+    Output("design-signal-min-trade-eur", "value"),
+    Output("design-signal-risk-per-trade-pct", "value"),
+    Output("design-signal-atr-period", "value"),
+    Output("design-signal-atr-mult", "value"),
+    Output("design-signal-stop-source", "value"),
+    Output("design-signal-stop-order-type", "value"),
+    Output("design-signal-stop-limit-buffer-bps", "value"),
     Output("design-sector-targets", "data"),
     Output("design-region-targets", "data"),
     Output("design-currency", "value"),
@@ -601,6 +829,17 @@ def design_load_policy(portfolio_id: int | None):
         policy.get("rebalance_freq", "quarterly"),
         policy.get("drift_trigger_pct", 5.0),
         policy.get("rebalance_method", "contributions_first"),
+        policy.get("signal_sizing_mode", "off"),
+        policy.get("signal_step_pct", 1.0),
+        policy.get("signal_strong_step_pct", 2.0),
+        policy.get("signal_exit_threshold_pct", 0.5),
+        policy.get("signal_min_trade_eur", 250),
+        policy.get("signal_risk_per_trade_pct", 0.5),
+        policy.get("signal_atr_period", 14),
+        policy.get("signal_atr_mult", 2.0),
+        policy.get("signal_stop_source", "strategy_stop"),
+        policy.get("signal_stop_order_type", "stop_limit"),
+        policy.get("signal_stop_limit_buffer_bps", 25),
         sector_targets,
         region_targets,
         snapshot.get("base_currency", "EUR"),
@@ -1153,6 +1392,17 @@ if DEBUG_DESIGN_PAGE:
     State("design-rebalance-freq", "value"),
     State("design-drift-trigger", "value"),
     State("design-rebalance-method", "value"),
+    State("design-signal-sizing-mode", "value"),
+    State("design-signal-step-pct", "value"),
+    State("design-signal-strong-step-pct", "value"),
+    State("design-signal-exit-threshold-pct", "value"),
+    State("design-signal-min-trade-eur", "value"),
+    State("design-signal-risk-per-trade-pct", "value"),
+    State("design-signal-atr-period", "value"),
+    State("design-signal-atr-mult", "value"),
+    State("design-signal-stop-source", "value"),
+    State("design-signal-stop-order-type", "value"),
+    State("design-signal-stop-limit-buffer-bps", "value"),
     State("design-sector-targets", "data"),
     State("design-region-targets", "data"),
     prevent_initial_call=True,
@@ -1170,6 +1420,17 @@ def design_save_policy(
     rebalance_freq: str | None,
     drift_trigger: float | None,
     rebalance_method: str | None,
+    signal_sizing_mode: str | None,
+    signal_step_pct: float | None,
+    signal_strong_step_pct: float | None,
+    signal_exit_threshold_pct: float | None,
+    signal_min_trade_eur: float | None,
+    signal_risk_per_trade_pct: float | None,
+    signal_atr_period: int | None,
+    signal_atr_mult: float | None,
+    signal_stop_source: str | None,
+    signal_stop_order_type: str | None,
+    signal_stop_limit_buffer_bps: float | None,
     sector_targets: list[dict] | None,
     region_targets: list[dict] | None,
 ):
@@ -1243,6 +1504,17 @@ def design_save_policy(
         "rebalance_freq": rebalance_freq,
         "drift_trigger_pct": drift_trigger,
         "rebalance_method": rebalance_method,
+        "signal_sizing_mode": signal_sizing_mode,
+        "signal_step_pct": signal_step_pct,
+        "signal_strong_step_pct": signal_strong_step_pct,
+        "signal_exit_threshold_pct": signal_exit_threshold_pct,
+        "signal_min_trade_eur": signal_min_trade_eur,
+        "signal_risk_per_trade_pct": signal_risk_per_trade_pct,
+        "signal_atr_period": signal_atr_period,
+        "signal_atr_mult": signal_atr_mult,
+        "signal_stop_source": signal_stop_source,
+        "signal_stop_order_type": signal_stop_order_type,
+        "signal_stop_limit_buffer_bps": signal_stop_limit_buffer_bps,
     }
 
     # Clean sector targets (filter out blank rows)
