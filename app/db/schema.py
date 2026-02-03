@@ -34,10 +34,43 @@ def ensure_schema() -> None:
                 drift_trigger_pct REAL DEFAULT 0.0,
                 rebalance_method TEXT DEFAULT 'contributions_first',
 
+                signal_sizing_mode TEXT DEFAULT 'off',
+                signal_step_pct REAL DEFAULT 1.0,
+                signal_strong_step_pct REAL DEFAULT 2.0,
+                signal_exit_threshold_pct REAL DEFAULT 0.5,
+                signal_min_trade_eur REAL DEFAULT 250.0,
+                signal_risk_per_trade_pct REAL DEFAULT 0.5,
+                signal_atr_period INTEGER DEFAULT 14,
+                signal_atr_mult REAL DEFAULT 2.0,
+                signal_stop_source TEXT DEFAULT 'strategy_stop',
+                signal_stop_order_type TEXT DEFAULT 'stop_limit',
+                signal_stop_limit_buffer_bps REAL DEFAULT 25.0,
+
                 updated_at TEXT
             );
             """
         )
+
+        # Add signal sizing columns to portfolio_policy (idempotent via try/except)
+        signal_sizing_columns = [
+            ("signal_sizing_mode", "TEXT DEFAULT 'off'"),
+            ("signal_step_pct", "REAL DEFAULT 1.0"),
+            ("signal_strong_step_pct", "REAL DEFAULT 2.0"),
+            ("signal_exit_threshold_pct", "REAL DEFAULT 0.5"),
+            ("signal_min_trade_eur", "REAL DEFAULT 250.0"),
+            ("signal_risk_per_trade_pct", "REAL DEFAULT 0.5"),
+            ("signal_atr_period", "INTEGER DEFAULT 14"),
+            ("signal_atr_mult", "REAL DEFAULT 2.0"),
+            ("signal_stop_source", "TEXT DEFAULT 'strategy_stop'"),
+            ("signal_stop_order_type", "TEXT DEFAULT 'stop_limit'"),
+            ("signal_stop_limit_buffer_bps", "REAL DEFAULT 25.0"),
+        ]
+
+        for col_name, col_def in signal_sizing_columns:
+            try:
+                cur.execute(f"ALTER TABLE portfolio_policy ADD COLUMN {col_name} {col_def}")
+            except Exception:
+                pass  # Column already exists
 
         # Sector targets table (already exists in your DB, but keep creation for robustness).
         cur.execute(
@@ -371,6 +404,83 @@ def ensure_schema() -> None:
             """
             CREATE INDEX IF NOT EXISTS idx_fundamentals_label
             ON benchmark_fundamentals(fundamental_label);
+            """
+        )
+
+        # Saved strategies table (Phase 3: Backtest strategy persistence)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS saved_strategies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                name TEXT NOT NULL,
+                base_strategy_key TEXT NOT NULL,
+                params_json TEXT NOT NULL,
+                notes TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(portfolio_id, ticker, name)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_saved_strategies_portfolio_ticker
+            ON saved_strategies(portfolio_id, ticker);
+            """
+        )
+
+        # Ticker strategy assignment table (Phase 3: Strategy-to-ticker assignment for signals)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ticker_strategy_assignment (
+                portfolio_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                saved_strategy_id INTEGER NOT NULL,
+                assigned_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (portfolio_id, ticker),
+                FOREIGN KEY(saved_strategy_id) REFERENCES saved_strategies(id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        # Watchlist – tickers the user wants to monitor before buying.
+        # A saved strategy can be assigned via ticker_strategy_assignment
+        # even though no position exists yet.
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS watchlist (
+                portfolio_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                added_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (portfolio_id, ticker)
+            );
+            """
+        )
+
+        # Backtest results cache (Phase 4: Cache backtest simulations)
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS backtest_cache (
+                portfolio_id INTEGER NOT NULL DEFAULT 1,
+                ticker TEXT NOT NULL,
+                strategy_key TEXT NOT NULL,
+                params_hash TEXT NOT NULL,
+                timeframe TEXT NOT NULL,
+                result_json TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                PRIMARY KEY (portfolio_id, ticker, strategy_key, params_hash, timeframe)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_backtest_cache_lookup
+            ON backtest_cache(portfolio_id, ticker, strategy_key, params_hash, timeframe);
             """
         )
 
