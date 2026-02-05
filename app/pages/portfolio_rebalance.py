@@ -16,13 +16,13 @@ from app.db.rebalance_repo import (
     get_cached_ai_job,
     create_ai_job,
     update_ai_job,
-    get_signals_for_portfolio,
 )
 from app.db.strategy_repo import get_assignment_map, get_saved_strategy_by_id
 from app.domain.ledger import compute_positions, compute_cash_balance
 from app.domain.rebalance import compute_full_rebalance_plan
 from app.services.market_data import get_latest_daily_closes_cached
 from app.services.signal_sizing_service import build_signal_trade_targets
+from app.services.signal_service import evaluate_position_signal
 
 
 def _safe_float(value, default=0.0):
@@ -577,30 +577,53 @@ def load_rebalance_data(portfolio_id, mode):
     policy_snapshot = load_policy_snapshot(portfolio_id)
     policy = policy_snapshot.get("policy", {})
 
-    # Load signals
-    signals_list = get_signals_for_portfolio(portfolio_id)
-
-    # Convert signals list to dict format for signal sizing service
-    signals_dict = {}
-    for sig in signals_list:
-        ticker = sig["ticker"]
-        signals_dict[ticker] = {
-            "signal": sig.get("signal", "HOLD"),
-            "strength": 1,  # Default, could be parsed from meta_json
-            "confidence": 1.0,
-            "reason": sig.get("reason", ""),
-        }
-
-    # Get latest prices
+    # Get latest prices first
     position_tickers = [p["ticker"] for p in positions]
-    signal_tickers = [s["ticker"] for s in signals_list]
-    all_tickers = list(set(position_tickers + signal_tickers))
+    all_tickers = list(set(position_tickers))
 
     prices, missing_tickers = get_latest_daily_closes_cached(
         all_tickers,
         max_age_minutes=60,
         force_refresh=False,
     )
+
+    # Evaluate signals live for all positions with strategy assignments
+    assignment_map = get_assignment_map(portfolio_id)
+    signals_list = []
+    signals_dict = {}
+
+    for position in positions:
+        ticker = position["ticker"]
+        saved_strategy_id = assignment_map.get(ticker)
+
+        if saved_strategy_id:
+            # Get strategy and evaluate signal
+            saved_strategy = get_saved_strategy_by_id(portfolio_id, saved_strategy_id)
+            if saved_strategy:
+                current_price = prices.get(ticker, 0.0)
+
+                # Evaluate signal live
+                signal_result = evaluate_position_signal(
+                    ticker=ticker,
+                    saved_strategy=saved_strategy,
+                    current_price=current_price,
+                    trades=trades,
+                )
+
+                # Convert to list format (for compatibility with old code)
+                signals_list.append({
+                    "ticker": ticker,
+                    "signal": signal_result.get("signal", "HOLD"),
+                    "reason": signal_result.get("reason", ""),
+                })
+
+                # Convert to dict format (for signal sizing service)
+                signals_dict[ticker] = {
+                    "signal": signal_result.get("signal", "HOLD"),
+                    "strength": 1,  # Default
+                    "confidence": 1.0,
+                    "reason": signal_result.get("reason", ""),
+                }
 
     # Build ticker metadata
     ticker_metadata = {}
