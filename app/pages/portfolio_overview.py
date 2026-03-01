@@ -52,6 +52,7 @@ PILL_INACTIVE_STYLE = {
 
 def layout() -> html.Div:
     return html.Div(
+        className="page",
         children=[
             # Page header
             html.Div(
@@ -76,6 +77,7 @@ def layout() -> html.Div:
                                     html.Div("Portfolio", className="field-label"),
                                     dcc.Dropdown(
                                         id="overview-portfolio",
+                                        className="dd-blend",
                                         options=[],
                                         value=None,
                                         clearable=False,
@@ -84,6 +86,11 @@ def layout() -> html.Div:
                                 ]
                             ),
                         ],
+                    ),
+                    html.Button(
+                        "Refresh EOD",
+                        id="overview-refresh-btn",
+                        className="refresh-button",
                     ),
                 ],
             ),
@@ -567,7 +574,6 @@ def layout() -> html.Div:
                 ],
             ),
         ],
-        style={"maxWidth": "1100px"},
     )
 
 
@@ -634,6 +640,7 @@ def populate_portfolio_dropdown(pathname):
     Output("overview-nav-overview", "style"),
     Output("overview-nav-breakdown", "style"),
     Output("overview-dropdown-container", "style"),
+    Output("overview-refresh-btn", "style"),
     Input("overview-nav-overview", "n_clicks"),
     Input("overview-nav-breakdown", "n_clicks"),
     prevent_initial_call=True,
@@ -661,12 +668,14 @@ def toggle_overview_panels(overview_clicks, breakdown_clicks):
         "breakdown": PILL_INACTIVE_STYLE,
     }
     dropdown_style = {"display": "none"}
+    refresh_btn_style = {"display": "none"}
 
     # Determine which tab was clicked
     if button_id == "overview-nav-overview":
         panel_styles["overview"] = {"display": "block"}
         active_states["overview"] = True
         pill_styles["overview"] = PILL_ACTIVE_STYLE
+        refresh_btn_style = {"display": "inline-block"}
     elif button_id == "overview-nav-breakdown":
         panel_styles["breakdown"] = {"display": "block"}
         active_states["breakdown"] = True
@@ -683,6 +692,7 @@ def toggle_overview_panels(overview_clicks, breakdown_clicks):
         pill_styles["overview"],
         pill_styles["breakdown"],
         dropdown_style,
+        refresh_btn_style,
     )
 
 
@@ -1221,11 +1231,23 @@ def refresh_overview_data(portfolio_id):
     Output("agg-chart-sectors", "figure"),
     Output("agg-contributors-table", "data"),
     Input("url", "pathname"),
+    Input("overview-refresh-btn", "n_clicks"),
 )
-def refresh_aggregated_overview(pathname):
+def refresh_aggregated_overview(pathname, refresh_clicks):
     """Main callback for Overview tab: aggregate across ALL portfolios."""
+    from dash import ctx
+
     if pathname not in ("/portfolio/overview", "/"):
         raise PreventUpdate
+
+    # Force refresh prices if button was clicked
+    if ctx.triggered_id == "overview-refresh-btn":
+        # Force refresh by calling market data service
+        from app.services.market_data import get_latest_daily_closes_cached
+        all_positions = get_all_current_positions()
+        position_tickers = list(set(p["ticker"] for p in all_positions))
+        if position_tickers:
+            get_latest_daily_closes_cached(position_tickers, force_refresh=True)
 
     # Get latest EOD date
     latest_date = get_latest_eod_date()

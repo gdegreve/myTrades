@@ -313,6 +313,56 @@ def get_all_portfolios_summary() -> dict[str, Any]:
         }
 
 
+def get_active_portfolios_summary(exclude_watchlist: bool = True) -> dict[str, Any]:
+    """Get aggregated summary data across active portfolios.
+
+    Args:
+        exclude_watchlist: If True, exclude portfolios named "Watchlist" (case-insensitive)
+
+    Returns:
+        dict with keys: total_cash_balance, total_invested
+    """
+    with get_connection() as conn:
+        if exclude_watchlist:
+            # Compute total cash balance from cash_transactions ledger (exclude watchlist)
+            cur = conn.execute(
+                """
+                SELECT COALESCE(
+                    SUM(CASE WHEN cash_type = 'credit' THEN amount_eur ELSE -amount_eur END),
+                    0
+                ) as total_cash
+                FROM cash_transactions
+                WHERE portfolio_id IN (
+                    SELECT id FROM portfolios WHERE LOWER(name) != 'watchlist'
+                )
+                """
+            )
+            row = cur.fetchone()
+            total_cash_balance = row["total_cash"] if row else 0.0
+
+            # Get total invested across active portfolios
+            cur = conn.execute(
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN transaction_type = 'buy' THEN shares * price_eur ELSE 0 END), 0) -
+                    COALESCE(SUM(CASE WHEN transaction_type = 'sell' THEN shares * price_eur ELSE 0 END), 0) as total_invested
+                FROM transactions
+                WHERE portfolio_id IN (
+                    SELECT id FROM portfolios WHERE LOWER(name) != 'watchlist'
+                )
+                """
+            )
+            row = cur.fetchone()
+            total_invested = row["total_invested"] if row else 0.0
+        else:
+            return get_all_portfolios_summary()
+
+        return {
+            "total_cash_balance": total_cash_balance,
+            "total_invested": total_invested,
+        }
+
+
 def get_all_current_positions() -> list[dict[str, Any]]:
     """Get current positions aggregated across ALL portfolios.
 
@@ -332,6 +382,57 @@ def get_all_current_positions() -> list[dict[str, Any]]:
             HAVING shares > 0.0001
             """
         )
+        rows = cur.fetchall()
+
+        positions = []
+        for row in rows:
+            shares = row["shares"]
+            total_buy_cost = row["total_buy_cost"] or 0.0
+            total_buy_shares = row["total_buy_shares"] or 0.0
+            avg_cost = total_buy_cost / total_buy_shares if total_buy_shares > 0 else 0.0
+            cost_basis = shares * avg_cost
+
+            positions.append({
+                "portfolio_id": row["portfolio_id"],
+                "ticker": row["ticker"],
+                "shares": shares,
+                "avg_cost": avg_cost,
+                "cost_basis": cost_basis,
+            })
+
+        return positions
+
+
+def get_active_current_positions(exclude_watchlist: bool = True) -> list[dict[str, Any]]:
+    """Get current positions across active portfolios.
+
+    Args:
+        exclude_watchlist: If True, exclude portfolios named "Watchlist" (case-insensitive)
+
+    Returns:
+        List of dicts with: portfolio_id, ticker, shares, avg_cost, cost_basis
+    """
+    with get_connection() as conn:
+        if exclude_watchlist:
+            cur = conn.execute(
+                """
+                SELECT
+                    portfolio_id,
+                    ticker,
+                    SUM(CASE WHEN transaction_type = 'buy' THEN shares ELSE -shares END) as shares,
+                    SUM(CASE WHEN transaction_type = 'buy' THEN shares * price_eur ELSE 0 END) as total_buy_cost,
+                    SUM(CASE WHEN transaction_type = 'buy' THEN shares ELSE 0 END) as total_buy_shares
+                FROM transactions
+                WHERE portfolio_id IN (
+                    SELECT id FROM portfolios WHERE LOWER(name) != 'watchlist'
+                )
+                GROUP BY portfolio_id, ticker
+                HAVING shares > 0.0001
+                """
+            )
+        else:
+            return get_all_current_positions()
+
         rows = cur.fetchall()
 
         positions = []

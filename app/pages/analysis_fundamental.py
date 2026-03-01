@@ -189,6 +189,7 @@ def layout() -> html.Div:
                                             html.Div("Benchmark", className="field-label"),
                                             dcc.Dropdown(
                                                 id="fundamental-benchmark",
+                                                className="dd-blend",
                                                 options=[],
                                                 value=None,
                                                 placeholder="Select benchmark",
@@ -359,7 +360,6 @@ def layout() -> html.Div:
                 ],
             ),
         ],
-        style={"maxWidth": "1100px"},
     )
 
 

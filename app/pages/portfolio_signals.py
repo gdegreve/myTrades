@@ -1,19 +1,27 @@
 from __future__ import annotations
 import dash_bootstrap_components as dbc
 
-from dash import dcc, html, Input, Output, callback, no_update
+from dash import dcc, html, Input, Output, State, callback, no_update
 from dash.dash_table import DataTable
 from dash.exceptions import PreventUpdate
 
 from app.db.portfolio_repo import list_portfolios
-from app.db.ledger_repo import list_trades
-from app.db.signals_repo import (
-    list_strategy_definitions,
-    get_ticker_strategy_map,
-    upsert_ticker_strategy,
-    list_signals_backlog,
+from app.db.ledger_repo import list_trades, list_cash_movements
+from app.db.signals_repo import list_signals_backlog
+from app.db.strategy_repo import (
+    list_saved_strategies,
+    get_saved_strategy_by_id,
+    get_assignment_map,
+    assign_saved_strategy,
+    add_to_watchlist,
+    remove_from_watchlist,
+    list_watchlist,
 )
-from app.domain.ledger import compute_positions
+from app.db.policy_repo import load_policy_snapshot
+from app.db.benchmarks_repo import get_latest_fundamentals_for_ticker
+from app.services.signal_service import evaluate_position_signal, evaluate_watchlist_signal
+from app.services.capital_allocation_service import compute_cas_for_rows
+from app.domain.ledger import compute_positions, compute_cash_balance
 from app.services.market_data import get_latest_daily_closes_cached
 
 
@@ -75,6 +83,13 @@ def layout() -> html.Div:
                 style={"marginBottom": "14px"},
             ),
 
+            # Watchlist version counter (triggers overview refresh on add / remove)
+            dcc.Store(id="watchlist-version", data=0),
+
+            # Visibility stores for collapsible sections
+            dcc.Store(id="signals-hold-visible", data=True),
+            dcc.Store(id="signals-risk-visible", data=True),
+
             # Nav pills for 3 tabs
             html.Div(
                 className="card",
@@ -114,29 +129,46 @@ def layout() -> html.Div:
                 id="signals-panel-overview",
                 style={"display": "block"},
                 children=[
+                    # Today's Allocation Brief
                     html.Div(
                         className="card",
+                        style={"marginBottom": "14px"},
+                        children=[
+                            html.Div("Today's Allocation Brief", className="card-title", style={"marginBottom": "10px"}),
+                            html.Div(id="signals-brief", children=[]),
+                        ],
+                    ),
+
+                    # Priority for Capital
+                    html.Div(
+                        className="card",
+                        style={"marginBottom": "14px"},
                         children=[
                             html.Div(
                                 className="card-title-row",
                                 children=[
-                                    html.Div("Current Signals", className="card-title"),
-                                    html.Div("Live signals based on latest prices and strategy assignments", className="hint-text"),
+                                    html.Div("Priority for Capital", className="card-title"),
+                                    html.Div("CAS ≥ 75, non-SELL signals", className="hint-text"),
                                 ],
                             ),
                             DataTable(
-                                id="signals-overview-table",
+                                id="signals-priority-table",
                                 columns=[
                                     {"name": "Ticker", "id": "ticker"},
+                                    {"name": "Mode", "id": "mode"},
                                     {"name": "Shares", "id": "shares", "type": "numeric"},
-                                    {"name": "Last Price", "id": "last_price", "type": "numeric"},
+                                    {"name": "Last Price", "id": "last_price"},
                                     {"name": "Signal", "id": "signal"},
+                                    {"name": "CAS", "id": "cas", "type": "numeric", "format": {"specifier": ".0f"}},
+                                    {"name": "Verdict", "id": "cas_verdict"},
                                     {"name": "Strategy", "id": "strategy"},
-                                    {"name": "Conflicts", "id": "conflicts"},
                                     {"name": "Reason", "id": "reason"},
                                 ],
                                 data=[],
-                                page_size=20,
+                                page_size=10,
+                                sort_action="native",
+                                sort_mode="single",
+                                sort_by=[{"column_id": "cas", "direction": "desc"}],
                                 style_table={"overflowX": "auto"},
                                 style_cell={"padding": "10px", "textAlign": "left"},
                                 style_header={"fontWeight": "600"},
@@ -144,15 +176,142 @@ def layout() -> html.Div:
                                     {
                                         "if": {"filter_query": "{signal} = BUY"},
                                         "backgroundColor": "rgba(40, 167, 69, 0.15)",
+                                        "color": "#2ecc71",
                                     },
-                                    {
-                                        "if": {"filter_query": "{signal} = SELL"},
-                                        "backgroundColor": "rgba(220, 53, 69, 0.15)",
-                                    },
-                                    {
-                                        "if": {"filter_query": "{signal} = DATA"},
-                                        "backgroundColor": "rgba(255, 193, 7, 0.15)",
-                                    },
+                                ],
+                            ),
+                        ],
+                    ),
+
+                    # Hold & Monitor (collapsible)
+                    html.Div(
+                        className="card",
+                        style={"marginBottom": "14px"},
+                        children=[
+                            html.Div(
+                                className="card-title-row",
+                                style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"},
+                                children=[
+                                    html.Div(
+                                        children=[
+                                            html.Div("Hold & Monitor", className="card-title"),
+                                            html.Div("CAS 45–74, stable positions", className="hint-text"),
+                                        ],
+                                    ),
+                                    html.Button(
+                                        "Show/Hide",
+                                        id="signals-hold-toggle-btn",
+                                        style={
+                                            "fontSize": "12px",
+                                            "padding": "4px 10px",
+                                            "border": "1px solid var(--border-strong)",
+                                            "backgroundColor": "transparent",
+                                            "color": "var(--text)",
+                                            "borderRadius": "4px",
+                                            "cursor": "pointer",
+                                        },
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                id="signals-hold-section",
+                                children=[
+                                    DataTable(
+                                        id="signals-hold-table",
+                                        columns=[
+                                            {"name": "Ticker", "id": "ticker"},
+                                            {"name": "Mode", "id": "mode"},
+                                            {"name": "Shares", "id": "shares", "type": "numeric"},
+                                            {"name": "Last Price", "id": "last_price"},
+                                            {"name": "Signal", "id": "signal"},
+                                            {"name": "CAS", "id": "cas", "type": "numeric", "format": {"specifier": ".0f"}},
+                                            {"name": "Verdict", "id": "cas_verdict"},
+                                            {"name": "Strategy", "id": "strategy"},
+                                            {"name": "Reason", "id": "reason"},
+                                        ],
+                                        data=[],
+                                        page_size=10,
+                                        sort_action="native",
+                                        sort_mode="single",
+                                        sort_by=[{"column_id": "cas", "direction": "desc"}],
+                                        style_table={"overflowX": "auto"},
+                                        style_cell={"padding": "10px", "textAlign": "left"},
+                                        style_header={"fontWeight": "600"},
+                                        style_data_conditional=[
+                                            {
+                                                "if": {"filter_query": "{signal} = HOLD"},
+                                                "backgroundColor": "rgba(243, 156, 18, 0.15)",
+                                                "color": "#f39c12",
+                                            },
+                                        ],
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+
+                    # Capital at Risk / Replace (collapsible)
+                    html.Div(
+                        className="card",
+                        style={"marginBottom": "14px"},
+                        children=[
+                            html.Div(
+                                className="card-title-row",
+                                style={"display": "flex", "justifyContent": "space-between", "alignItems": "center"},
+                                children=[
+                                    html.Div(
+                                        children=[
+                                            html.Div("Capital at Risk / Replace", className="card-title"),
+                                            html.Div("CAS < 45 or SELL signals", className="hint-text"),
+                                        ],
+                                    ),
+                                    html.Button(
+                                        "Show/Hide",
+                                        id="signals-risk-toggle-btn",
+                                        style={
+                                            "fontSize": "12px",
+                                            "padding": "4px 10px",
+                                            "border": "1px solid var(--border-strong)",
+                                            "backgroundColor": "transparent",
+                                            "color": "var(--text)",
+                                            "borderRadius": "4px",
+                                            "cursor": "pointer",
+                                        },
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                id="signals-risk-section",
+                                children=[
+                                    DataTable(
+                                        id="signals-risk-table",
+                                        columns=[
+                                            {"name": "Ticker", "id": "ticker"},
+                                            {"name": "Mode", "id": "mode"},
+                                            {"name": "Shares", "id": "shares", "type": "numeric"},
+                                            {"name": "Last Price", "id": "last_price"},
+                                            {"name": "Signal", "id": "signal"},
+                                            {"name": "CAS", "id": "cas", "type": "numeric", "format": {"specifier": ".0f"}},
+                                            {"name": "Verdict", "id": "cas_verdict"},
+                                            {"name": "Strategy", "id": "strategy"},
+                                            {"name": "Reason", "id": "reason"},
+                                        ],
+                                        data=[],
+                                        page_size=10,
+                                        sort_action="native",
+                                        sort_mode="single",
+                                        sort_by=[{"column_id": "cas", "direction": "asc"}],
+                                        style_table={"overflowX": "auto"},
+                                        style_cell={"padding": "10px", "textAlign": "left"},
+                                        style_header={"fontWeight": "600"},
+                                        style_data_conditional=[
+                                            {
+                                                "if": {"filter_query": "{signal} = SELL"},
+                                                "backgroundColor": "rgba(220, 53, 69, 0.15)",
+                                                "color": "#e74c3c",
+                                            },
+                                        ],
+                                    ),
                                 ],
                             ),
                         ],
@@ -219,6 +378,79 @@ def layout() -> html.Div:
                     ),
 
                     
+
+                    # Watchlist management card
+                    html.Div(
+                        className="card",
+                        style={"marginBottom": "14px"},
+                        children=[
+                            html.Div("Watchlist", className="card-title", style={"marginBottom": "14px"}),
+                            html.Div(
+                                className="grid-3",
+                                style={"marginBottom": "14px"},
+                                children=[
+                                    html.Div(
+                                        children=[
+                                            html.Div("Add ticker", className="field-label"),
+                                            dcc.Input(
+                                                id="watchlist-ticker-input",
+                                                type="text",
+                                                placeholder="e.g. MSFT",
+                                                debounce=False,
+                                                style={"width": "100%", "padding": "6px 10px", "borderRadius": "4px", "border": "1px solid var(--border-strong)", "boxSizing": "border-box"},
+                                            ),
+                                        ]
+                                    ),
+                                    html.Div(
+                                        children=[
+                                            html.Div("Remove ticker", className="field-label"),
+                                            dcc.Dropdown(
+                                                id="watchlist-remove-ticker",
+                                                className="dd-blend",
+                                                options=[],
+                                                placeholder="Select ticker",
+                                                clearable=False,
+                                            ),
+                                        ]
+                                    ),
+                                    html.Div(
+                                        style={"display": "flex", "gap": "8px", "alignItems": "flex-end"},
+                                        children=[
+                                            html.Button(
+                                                "Add",
+                                                id="watchlist-add-btn",
+                                                className="btn-primary",
+                                                n_clicks=0,
+                                                style={"flex": "1"},
+                                            ),
+                                            html.Button(
+                                                "Remove",
+                                                id="watchlist-remove-btn",
+                                                className="btn-secondary",
+                                                n_clicks=0,
+                                                style={"flex": "1"},
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
+                            html.Div(id="watchlist-status", style={"marginBottom": "8px"}),
+                            DataTable(
+                                id="watchlist-table",
+                                columns=[
+                                    {"name": "Ticker", "id": "ticker"},
+                                    {"name": "Strategy", "id": "strategy"},
+                                    {"name": "Notes", "id": "notes"},
+                                    {"name": "Added", "id": "added_at"},
+                                ],
+                                data=[],
+                                page_size=10,
+                                style_table={"overflowX": "auto"},
+                                style_cell={"padding": "8px 10px", "textAlign": "left"},
+                                style_header={"fontWeight": "600"},
+                            ),
+                        ],
+                    ),
 
                     # Current assignments table
                     html.Div(
@@ -355,8 +587,38 @@ def layout() -> html.Div:
                 ],
             ),
         ],
-        style={"maxWidth": "1100px"},
     )
+
+
+def bucket_rows(rows: list[dict]) -> tuple[list[dict], list[dict], list[dict]]:
+    """Bucket signal rows into Priority, Hold, and Risk categories.
+
+    Args:
+        rows: List of signal row dicts with cas, cas_verdict, and signal keys
+
+    Returns:
+        Tuple of (priority_rows, hold_rows, risk_rows)
+    """
+    priority_rows = []
+    hold_rows = []
+    risk_rows = []
+
+    for row in rows:
+        cas = row.get("cas", 50)
+        verdict = row.get("cas_verdict", "HOLD")
+        signal = row.get("signal", "HOLD")
+
+        # Priority: CAS >= 75 AND signal != SELL
+        if cas >= 75 and signal != "SELL":
+            priority_rows.append(row)
+        # Risk: CAS < 45 OR signal == SELL
+        elif cas < 45 or signal == "SELL":
+            risk_rows.append(row)
+        # Hold: Everything else (CAS 45-74, or other conditions)
+        else:
+            hold_rows.append(row)
+
+    return priority_rows, hold_rows, risk_rows
 
 
 @callback(
@@ -373,6 +635,37 @@ def populate_portfolio_dropdown(pathname):
         return [], None
     options = [{"label": p["name"], "value": p["id"]} for p in portfolios]
     return options, portfolios[0]["id"]
+
+
+@callback(
+    Output("signals-status", "children", allow_duplicate=True),
+    Input("signals-portfolio", "value"),
+    prevent_initial_call=True,
+)
+def show_portfolio_warning(portfolio_id):
+    """Show warning if portfolio_id != 1 (Technical Backtest uses portfolio_id=1)."""
+    if portfolio_id is None:
+        raise PreventUpdate
+
+    if portfolio_id != 1:
+        return html.Div(
+            [
+                html.Strong("⚠️ Portfolio Mismatch: "),
+                "Assignments are stored per portfolio. ",
+                "Technical Backtest currently uses Portfolio ID 1. ",
+                "If you assigned strategies there, select that portfolio here to see them.",
+            ],
+            style={
+                "color": "#856404",
+                "backgroundColor": "#fff3cd",
+                "padding": "10px 14px",
+                "borderRadius": "4px",
+                "fontSize": "14px",
+                "marginBottom": "14px",
+            },
+        )
+
+    return None
 
 
 @callback(
@@ -446,101 +739,281 @@ def toggle_signals_panels(overview_clicks, manage_clicks, backlog_clicks):
 
 
 @callback(
-    Output("signals-overview-table", "data"),
+    Output("signals-priority-table", "data"),
+    Output("signals-hold-table", "data"),
+    Output("signals-risk-table", "data"),
+    Output("signals-brief", "children"),
     Output("strategy-assign-ticker", "options"),
     Output("strategy-assign-strategy", "options"),
     Input("signals-portfolio", "value"),
+    Input("watchlist-version", "data"),
 )
-def refresh_signals_overview(portfolio_id):
-    """Refresh signal overview table when portfolio changes."""
+def refresh_signals_overview(portfolio_id, _watchlist_ver):
+    """Refresh signal overview tables and brief when portfolio or watchlist changes."""
     if portfolio_id is None:
         raise PreventUpdate
 
-    # Fetch positions and prices
+    # Positions & trades
     trades = list_trades(portfolio_id, limit=1000)
     positions = compute_positions(trades)
-    ticker_list = [p["ticker"] for p in positions]
+    position_tickers = [p["ticker"] for p in positions]
 
-    # Fetch prices
-    prices, missing_tickers = get_latest_daily_closes_cached(
-        ticker_list,
+    # Watchlist tickers
+    watchlist_entries = list_watchlist(portfolio_id)
+    watchlist_tickers = [w["ticker"] for w in watchlist_entries]
+
+    # All tickers deduplicated (positions first)
+    all_tickers = list(dict.fromkeys(position_tickers + watchlist_tickers))
+
+    # Fetch native-currency prices for all
+    prices, _ = get_latest_daily_closes_cached(
+        all_tickers,
         max_age_minutes=60,
         force_refresh=False,
     )
 
-    # Fetch strategy assignments
-    strategy_map = get_ticker_strategy_map(portfolio_id)
-    strategies = list_strategy_definitions()
+    # Strategy assignments  {ticker: saved_strategy_id}
+    assignment_map = get_assignment_map(portfolio_id)
 
-    # Build signal rows
+    # --- position rows ---------------------------------------------------
     signal_rows = []
     for pos in positions:
         ticker = pos["ticker"]
         shares = pos["shares"]
-        last_price = prices.get(ticker, None)
-        strategy_key = strategy_map.get(ticker, None)
+        last_price = prices.get(ticker)
+        saved_strategy_id = assignment_map.get(ticker)
 
-        # Signal logic
         if last_price is None:
-            signal = "DATA"
-            reason = "Missing price data"
-        elif strategy_key is None:
-            signal = "HOLD"
-            reason = "No strategy assigned"
+            signal, reason, strategy_display = "DATA", "Missing price data", "None"
+        elif saved_strategy_id is None:
+            signal, reason, strategy_display = "HOLD", "No strategy assigned", "None"
         else:
-            signal = "HOLD"
-            reason = "Strategy applied (placeholder logic)"
-
-        # Strategy name lookup
-        strategy_name = next((s["name"] for s in strategies if s["strategy_key"] == strategy_key), "None") if strategy_key else "None"
+            saved_strategy = get_saved_strategy_by_id(portfolio_id, saved_strategy_id)
+            if saved_strategy:
+                strategy_display = f"{saved_strategy['name']} ({saved_strategy['base_strategy_key']})"
+                result = evaluate_position_signal(ticker, saved_strategy, last_price, trades)
+                signal = result["signal"]
+                reason = result["reason"]
+            else:
+                signal, reason = "DATA", "Assigned strategy not found"
+                strategy_display = "ERROR: Strategy not found"
 
         signal_rows.append({
             "ticker": ticker,
+            "mode": "Position",
             "shares": round(shares, 4),
-            "last_price": f"€{last_price:.2f}" if last_price else "N/A",
+            "last_price": f"{last_price:.2f}" if last_price else "N/A",
             "signal": signal,
-            "strategy": strategy_name,
+            "strategy": strategy_display,
             "conflicts": "",
             "reason": reason,
         })
 
-    # Populate ticker dropdown for assignment
-    ticker_options = [{"label": t, "value": t} for t in sorted(ticker_list)]
+    # --- watchlist rows (skip tickers already covered by positions) -------
+    position_set = set(position_tickers)
+    for ticker in watchlist_tickers:
+        if ticker in position_set:
+            continue  # position row already emitted
 
-    # Populate strategy dropdown
-    strategy_options = [{"label": s["name"], "value": s["strategy_key"]} for s in strategies]
+        last_price = prices.get(ticker)
+        saved_strategy_id = assignment_map.get(ticker)
 
-    return signal_rows, ticker_options, strategy_options
+        if last_price is None:
+            signal, reason, strategy_display = "DATA", "Missing price data", "None"
+        elif saved_strategy_id is None:
+            signal, reason, strategy_display = "HOLD", "No strategy assigned", "None"
+        else:
+            saved_strategy = get_saved_strategy_by_id(portfolio_id, saved_strategy_id)
+            if saved_strategy:
+                strategy_display = f"{saved_strategy['name']} ({saved_strategy['base_strategy_key']})"
+                result = evaluate_watchlist_signal(ticker, saved_strategy)
+                signal = result["signal"]
+                reason = result["reason"]
+            else:
+                signal, reason = "DATA", "Assigned strategy not found"
+                strategy_display = "ERROR: Strategy not found"
+
+        signal_rows.append({
+            "ticker": ticker,
+            "mode": "Watchlist",
+            "shares": 0,
+            "last_price": f"{last_price:.2f}" if last_price else "N/A",
+            "signal": signal,
+            "strategy": strategy_display,
+            "conflicts": "",
+            "reason": reason,
+        })
+
+    # --- Compute CAS for all rows -----------------------------------------------
+    # Load policy and cash balance for CAS context
+    policy = load_policy_snapshot(portfolio_id).get("policy", {})
+    cash_movements = list_cash_movements(portfolio_id, limit=1000)
+    cash_balance = compute_cash_balance(cash_movements, trades)
+
+    # Build fundamentals map {ticker: fundamental_score}
+    fundamentals_map = {}
+    for ticker in all_tickers:
+        fund_data = get_latest_fundamentals_for_ticker(ticker)
+        if fund_data and fund_data.get("bench_score_total") is not None:
+            try:
+                bench_score = float(fund_data["bench_score_total"])
+                confidence = float(fund_data.get("bench_confidence", 100))
+                fundamental_score = (bench_score * confidence) / 100
+                fundamentals_map[ticker] = fundamental_score
+            except (ValueError, TypeError):
+                # Skip if conversion fails
+                pass
+
+    # Compute CAS for all rows
+    signal_rows = compute_cas_for_rows(
+        signal_rows,
+        positions,
+        prices,
+        cash_balance,
+        policy=policy,
+        fundamentals_map=fundamentals_map,
+    )
+
+    # Bucket rows into Priority, Hold, and Risk
+    priority_rows, hold_rows, risk_rows = bucket_rows(signal_rows)
+
+    # Build allocation brief
+    priority_count = len(priority_rows)
+    hold_count = len(hold_rows)
+    risk_count = len(risk_rows)
+    sell_count = sum(1 for r in signal_rows if r.get("signal") == "SELL")
+
+    # Build brief content
+    brief_content = [
+        html.Div(
+            className="grid-3",
+            style={"marginBottom": "12px"},
+            children=[
+                html.Div([
+                    html.Div(f"{priority_count}", style={"fontSize": "24px", "fontWeight": "600", "color": "#2ecc71"}),
+                    html.Div("Priority", style={"fontSize": "12px", "color": "var(--text-muted)"}),
+                ]),
+                html.Div([
+                    html.Div(f"{hold_count}", style={"fontSize": "24px", "fontWeight": "600", "color": "#f39c12"}),
+                    html.Div("Hold", style={"fontSize": "12px", "color": "var(--text-muted)"}),
+                ]),
+                html.Div([
+                    html.Div(f"{risk_count}", style={"fontSize": "24px", "fontWeight": "600", "color": "#e74c3c"}),
+                    html.Div("Risk", style={"fontSize": "12px", "color": "var(--text-muted)"}),
+                ]),
+            ],
+        ),
+    ]
+
+    # Next best action
+    if priority_count > 0:
+        top_priority = max(priority_rows, key=lambda r: r.get("cas", 0))
+        top_ticker = top_priority.get("ticker", "—")
+        top_cas = top_priority.get("cas", 0)
+        action_text = f"If you add money this month, start with {top_ticker} (CAS {top_cas:.0f})."
+    else:
+        action_text = "No priority buys today. Focus on contributions and staying within policy."
+
+    brief_content.append(
+        html.Div(action_text, style={"marginBottom": "8px", "fontSize": "14px"})
+    )
+
+    # SELL warning
+    if sell_count > 0:
+        brief_content.append(
+            html.Div(
+                f"There are {sell_count} SELL signals; consider trims only if aligned with your long-term plan.",
+                style={"fontSize": "13px", "color": "var(--danger)", "marginBottom": "8px"},
+            )
+        )
+
+    # CAS formula legend
+    brief_content.append(
+        html.Div(
+            "CAS = 35% Fundamental + 25% Trend + 20% Fit + 15% Risk + 5% Cash",
+            style={"fontSize": "11px", "color": "var(--text-muted)", "marginTop": "10px"},
+        )
+    )
+
+    # Ticker options: positions + watchlist
+    ticker_options = [{"label": t, "value": t} for t in sorted(set(all_tickers))]
+
+    return priority_rows, hold_rows, risk_rows, brief_content, ticker_options, []
+
+
+@callback(
+    Output("strategy-assign-strategy", "options", allow_duplicate=True),
+    Input("signals-portfolio", "value"),
+    Input("strategy-assign-ticker", "value"),
+    prevent_initial_call=True,
+)
+def populate_strategy_dropdown(portfolio_id, ticker):
+    """Populate strategy dropdown with saved strategies for the selected ticker."""
+    if portfolio_id is None or not ticker:
+        return []
+
+    # List saved strategies for this ticker
+    saved_strategies = list_saved_strategies(portfolio_id, ticker)
+
+    if not saved_strategies:
+        return []
+
+    # Build options: label shows name and base strategy, value is saved_strategy_id
+    options = [
+        {
+            "label": f"{s['name']} ({s['base_strategy_key']})",
+            "value": s["id"]
+        }
+        for s in saved_strategies
+    ]
+
+    return options
 
 
 @callback(
     Output("signals-manage-table", "data"),
     Input("signals-portfolio", "value"),
+    Input("watchlist-version", "data"),
 )
-def refresh_strategy_assignments(portfolio_id):
-    """Refresh strategy assignments table."""
+def refresh_strategy_assignments(portfolio_id, _watchlist_ver):
+    """Refresh strategy assignments table (positions + watchlist)."""
     if portfolio_id is None:
         raise PreventUpdate
 
-    # Fetch trades and positions
+    # Positions
     trades = list_trades(portfolio_id, limit=1000)
     positions = compute_positions(trades)
-    ticker_list = [p["ticker"] for p in positions]
+    position_tickers = {p["ticker"] for p in positions}
 
-    # Fetch strategy assignments
-    strategy_map = get_ticker_strategy_map(portfolio_id)
-    strategies = list_strategy_definitions()
+    # Watchlist
+    watchlist_tickers = {w["ticker"] for w in list_watchlist(portfolio_id)}
 
-    # Build assignment rows
+    # All tickers deduplicated
+    all_tickers = sorted(position_tickers | watchlist_tickers)
+
+    # Strategy assignments
+    assignment_map = get_assignment_map(portfolio_id)
+
     assignment_rows = []
-    for ticker in sorted(ticker_list):
-        strategy_key = strategy_map.get(ticker, None)
-        strategy_name = next((s["name"] for s in strategies if s["strategy_key"] == strategy_key), "None") if strategy_key else "None"
-        status = "Assigned" if strategy_key else "Unassigned"
+    for ticker in all_tickers:
+        saved_strategy_id = assignment_map.get(ticker)
+        mode = "Position" if ticker in position_tickers else "Watchlist"
+
+        if saved_strategy_id:
+            saved_strategy = get_saved_strategy_by_id(portfolio_id, saved_strategy_id)
+            if saved_strategy:
+                strategy_display = f"{saved_strategy['name']} ({saved_strategy['base_strategy_key']})"
+                status = f"Assigned ({mode})"
+            else:
+                strategy_display = "ERROR: Not found"
+                status = "Error"
+        else:
+            strategy_display = "None"
+            status = f"Unassigned ({mode})"
 
         assignment_rows.append({
             "ticker": ticker,
-            "strategy": strategy_name,
+            "strategy": strategy_display,
             "status": status,
         })
 
@@ -550,32 +1023,49 @@ def refresh_strategy_assignments(portfolio_id):
 @callback(
     Output("strategy-preview-content", "children"),
     Input("strategy-assign-strategy", "value"),
+    Input("signals-portfolio", "value"),
+    Input("strategy-assign-ticker", "value"),
 )
-def update_strategy_preview(strategy_key):
+def update_strategy_preview(saved_strategy_id, portfolio_id, ticker):
     """Update strategy preview when strategy selection changes."""
-    if not strategy_key:
+    if not saved_strategy_id or portfolio_id is None or not ticker:
         return "Select a strategy to view details"
 
-    strategies = list_strategy_definitions()
-    strategy = next((s for s in strategies if s["strategy_key"] == strategy_key), None)
+    # Get saved strategy details
+    saved_strategy = get_saved_strategy_by_id(portfolio_id, saved_strategy_id)
 
-    if not strategy:
+    if not saved_strategy:
         return "Strategy not found"
+
+    # Format parameters (show first 6 keys)
+    params = saved_strategy.get("params", {})
+    param_keys = list(params.keys())[:6]
+    param_summary = ", ".join([f"{k}={params[k]}" for k in param_keys])
+    if len(params) > 6:
+        param_summary += f" ... ({len(params) - 6} more)"
 
     return html.Div(
         children=[
             html.Div(
-                strategy["name"],
+                saved_strategy["name"],
                 style={"fontSize": "16px", "fontWeight": "600", "marginBottom": "8px"},
             ),
             html.Div(
-                strategy.get("description", "No description available"),
+                f"Base Strategy: {saved_strategy['base_strategy_key']}",
                 style={"marginBottom": "8px", "color": "var(--text-secondary)"},
             ),
             html.Div(
-                f"Parameters: {strategy.get('params_json', '{}')}",
+                f"Ticker: {saved_strategy['ticker']}",
+                style={"marginBottom": "8px", "fontSize": "13px", "color": "var(--text-hint)"},
+            ),
+            html.Div(
+                f"Parameters: {param_summary}",
                 style={"fontSize": "13px", "color": "var(--text-hint)"},
             ),
+            html.Div(
+                saved_strategy.get("notes", ""),
+                style={"marginTop": "8px", "fontSize": "12px", "fontStyle": "italic", "color": "var(--text-hint)"},
+            ) if saved_strategy.get("notes") else None,
         ]
     )
 
@@ -583,20 +1073,22 @@ def update_strategy_preview(strategy_key):
 @callback(
     Output("signals-status", "children"),
     Output("signals-manage-table", "data", allow_duplicate=True),
+    Output("watchlist-version", "data", allow_duplicate=True),
     Input("strategy-assign-btn", "n_clicks"),
     Input("signals-portfolio", "value"),
     Input("strategy-assign-ticker", "value"),
     Input("strategy-assign-strategy", "value"),
+    State("watchlist-version", "data"),
     prevent_initial_call=True,
 )
-def handle_strategy_assignment(n_clicks, portfolio_id, ticker, strategy_key):
-    """Handle strategy assignment to ticker."""
-    if not n_clicks or portfolio_id is None or not ticker or not strategy_key:
+def handle_strategy_assignment(n_clicks, portfolio_id, ticker, saved_strategy_id, current_version):
+    """Handle strategy assignment to ticker (also bumps overview refresh)."""
+    if not n_clicks or portfolio_id is None or not ticker or not saved_strategy_id:
         raise PreventUpdate
 
-    # Assign strategy
+    # Assign saved strategy
     try:
-        upsert_ticker_strategy(portfolio_id, ticker, strategy_key)
+        assign_saved_strategy(portfolio_id, ticker, saved_strategy_id)
     except Exception as e:
         error_status = html.Div(
             f"Assignment failed: {str(e)}",
@@ -608,7 +1100,7 @@ def handle_strategy_assignment(n_clicks, portfolio_id, ticker, strategy_key):
                 "fontSize": "14px",
             },
         )
-        return error_status, no_update
+        return error_status, no_update, no_update
 
     # Success status
     success_status = html.Div(
@@ -622,27 +1114,34 @@ def handle_strategy_assignment(n_clicks, portfolio_id, ticker, strategy_key):
         },
     )
 
-    # Refresh assignments table
+    # Refresh assignments table (include watchlist tickers)
     trades = list_trades(portfolio_id, limit=1000)
     positions = compute_positions(trades)
-    ticker_list = [p["ticker"] for p in positions]
+    position_tickers = {p["ticker"] for p in positions}
+    watchlist_tickers = {w["ticker"] for w in list_watchlist(portfolio_id)}
+    all_tickers = sorted(position_tickers | watchlist_tickers)
 
-    strategy_map = get_ticker_strategy_map(portfolio_id)
-    strategies = list_strategy_definitions()
+    assignment_map = get_assignment_map(portfolio_id)
 
     assignment_rows = []
-    for t in sorted(ticker_list):
-        sk = strategy_map.get(t, None)
-        sn = next((s["name"] for s in strategies if s["strategy_key"] == sk), "None") if sk else "None"
-        status = "Assigned" if sk else "Unassigned"
+    for t in all_tickers:
+        sid = assignment_map.get(t)
+        mode = "Position" if t in position_tickers else "Watchlist"
+        if sid:
+            saved = get_saved_strategy_by_id(portfolio_id, sid)
+            strategy_display = f"{saved['name']} ({saved['base_strategy_key']})" if saved else "ERROR: Not found"
+            status = f"Assigned ({mode})" if saved else "Error"
+        else:
+            strategy_display = "None"
+            status = f"Unassigned ({mode})"
 
         assignment_rows.append({
             "ticker": t,
-            "strategy": sn,
+            "strategy": strategy_display,
             "status": status,
         })
 
-    return success_status, assignment_rows
+    return success_status, assignment_rows, (current_version or 0) + 1
 
 
 @callback(
@@ -679,3 +1178,156 @@ def refresh_signals_backlog(portfolio_id, filter_ticker, filter_strategy, filter
         })
 
     return filtered_backlog
+
+
+@callback(
+    Output("watchlist-table", "data"),
+    Output("watchlist-remove-ticker", "options"),
+    Input("signals-portfolio", "value"),
+    Input("watchlist-version", "data"),
+)
+def refresh_watchlist_table(portfolio_id, _watchlist_ver):
+    """Populate watchlist table and remove dropdown."""
+    if portfolio_id is None:
+        raise PreventUpdate
+
+    watchlist = list_watchlist(portfolio_id)
+    assignment_map = get_assignment_map(portfolio_id)
+
+    rows = []
+    for w in watchlist:
+        ticker = w["ticker"]
+        sid = assignment_map.get(ticker)
+        strategy_name = "None"
+        if sid:
+            saved = get_saved_strategy_by_id(portfolio_id, sid)
+            if saved:
+                strategy_name = f"{saved['name']} ({saved['base_strategy_key']})"
+        rows.append({
+            "ticker": ticker,
+            "strategy": strategy_name,
+            "notes": w.get("notes", ""),
+            "added_at": w.get("added_at", ""),
+        })
+
+    remove_options = [{"label": w["ticker"], "value": w["ticker"]} for w in watchlist]
+    return rows, remove_options
+
+
+@callback(
+    Output("watchlist-status", "children"),
+    Output("watchlist-version", "data"),
+    Output("watchlist-table", "data", allow_duplicate=True),
+    Output("watchlist-remove-ticker", "options", allow_duplicate=True),
+    Output("watchlist-ticker-input", "value"),
+    Input("watchlist-add-btn", "n_clicks"),
+    State("signals-portfolio", "value"),
+    State("watchlist-ticker-input", "value"),
+    State("watchlist-version", "data"),
+    prevent_initial_call=True,
+)
+def handle_add_to_watchlist(n_clicks, portfolio_id, ticker_input, current_version):
+    """Add a ticker to the watchlist."""
+    if not n_clicks or portfolio_id is None or not ticker_input:
+        raise PreventUpdate
+
+    ticker = ticker_input.strip().upper()
+    if not ticker:
+        raise PreventUpdate
+
+    try:
+        add_to_watchlist(portfolio_id, ticker)
+    except Exception as e:
+        return (
+            html.Div(f"Failed to add {ticker}: {e}", style={"color": "#721c24", "backgroundColor": "#f8d7da", "padding": "8px 12px", "borderRadius": "4px", "fontSize": "13px"}),
+            no_update, no_update, no_update, "",
+        )
+
+    # Refresh watchlist data
+    watchlist = list_watchlist(portfolio_id)
+    assignment_map = get_assignment_map(portfolio_id)
+    rows = []
+    for w in watchlist:
+        t = w["ticker"]
+        sid = assignment_map.get(t)
+        sname = "None"
+        if sid:
+            saved = get_saved_strategy_by_id(portfolio_id, sid)
+            if saved:
+                sname = f"{saved['name']} ({saved['base_strategy_key']})"
+        rows.append({"ticker": t, "strategy": sname, "notes": w.get("notes", ""), "added_at": w.get("added_at", "")})
+
+    remove_opts = [{"label": w["ticker"], "value": w["ticker"]} for w in watchlist]
+    success = html.Div(f"{ticker} added to watchlist", style={"color": "#155724", "backgroundColor": "#d4edda", "padding": "8px 12px", "borderRadius": "4px", "fontSize": "13px"})
+    return success, (current_version or 0) + 1, rows, remove_opts, ""
+
+
+@callback(
+    Output("watchlist-status", "children", allow_duplicate=True),
+    Output("watchlist-version", "data", allow_duplicate=True),
+    Output("watchlist-table", "data", allow_duplicate=True),
+    Output("watchlist-remove-ticker", "options", allow_duplicate=True),
+    Input("watchlist-remove-btn", "n_clicks"),
+    State("signals-portfolio", "value"),
+    State("watchlist-remove-ticker", "value"),
+    State("watchlist-version", "data"),
+    prevent_initial_call=True,
+)
+def handle_remove_from_watchlist(n_clicks, portfolio_id, ticker, current_version):
+    """Remove a ticker from the watchlist."""
+    if not n_clicks or portfolio_id is None or not ticker:
+        raise PreventUpdate
+
+    try:
+        remove_from_watchlist(portfolio_id, ticker)
+    except Exception as e:
+        return (
+            html.Div(f"Failed to remove {ticker}: {e}", style={"color": "#721c24", "backgroundColor": "#f8d7da", "padding": "8px 12px", "borderRadius": "4px", "fontSize": "13px"}),
+            no_update, no_update, no_update,
+        )
+
+    # Refresh watchlist data
+    watchlist = list_watchlist(portfolio_id)
+    assignment_map = get_assignment_map(portfolio_id)
+    rows = []
+    for w in watchlist:
+        t = w["ticker"]
+        sid = assignment_map.get(t)
+        sname = "None"
+        if sid:
+            saved = get_saved_strategy_by_id(portfolio_id, sid)
+            if saved:
+                sname = f"{saved['name']} ({saved['base_strategy_key']})"
+        rows.append({"ticker": t, "strategy": sname, "notes": w.get("notes", ""), "added_at": w.get("added_at", "")})
+
+    remove_opts = [{"label": w["ticker"], "value": w["ticker"]} for w in watchlist]
+    success = html.Div(f"{ticker} removed from watchlist", style={"color": "#155724", "backgroundColor": "#d4edda", "padding": "8px 12px", "borderRadius": "4px", "fontSize": "13px"})
+    return success, (current_version or 0) + 1, rows, remove_opts
+
+
+@callback(
+    Output("signals-hold-visible", "data"),
+    Output("signals-hold-section", "style"),
+    Input("signals-hold-toggle-btn", "n_clicks"),
+    State("signals-hold-visible", "data"),
+    prevent_initial_call=True,
+)
+def toggle_hold_section(n_clicks, current_visible):
+    """Toggle visibility of Hold & Monitor section."""
+    new_visible = not current_visible
+    style = {"display": "block"} if new_visible else {"display": "none"}
+    return new_visible, style
+
+
+@callback(
+    Output("signals-risk-visible", "data"),
+    Output("signals-risk-section", "style"),
+    Input("signals-risk-toggle-btn", "n_clicks"),
+    State("signals-risk-visible", "data"),
+    prevent_initial_call=True,
+)
+def toggle_risk_section(n_clicks, current_visible):
+    """Toggle visibility of Capital at Risk section."""
+    new_visible = not current_visible
+    style = {"display": "block"} if new_visible else {"display": "none"}
+    return new_visible, style

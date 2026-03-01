@@ -3,6 +3,31 @@ from __future__ import annotations
 from typing import Any
 
 from app.db.connection import get_connection
+from app.db.regions_repo import get_ticker_regions, upsert_ticker_regions
+
+
+def _infer_region_from_ticker(ticker: str) -> str:
+    """Infer region from ticker exchange suffix.
+
+    Args:
+        ticker: Ticker symbol (e.g., "AAPL", "ASML.AS", "TTE.PA")
+
+    Returns:
+        Region string: "Europe" or "US"
+
+    Logic:
+        - European exchanges: .PA, .BR, .AS, .L, .DE, .MI, etc.
+        - US/default: everything else
+    """
+    ticker_upper = ticker.upper()
+
+    # European exchange suffixes
+    european_suffixes = ('.PA', '.BR', '.AS', '.L', '.DE', '.MI', '.MC', '.SW', '.VI', '.CO')
+
+    if any(ticker_upper.endswith(suffix) for suffix in european_suffixes):
+        return "Europe"
+
+    return "US"
 
 
 def list_trades(portfolio_id: int, limit: int = 50) -> list[dict[str, Any]]:
@@ -163,7 +188,10 @@ def insert_trade(
     ticker: str,
     transaction_type: str,
     shares: float,
+    price: float,
+    price_currency: str,
     price_eur: float,
+    fx_rate: float,
     commission: float,
     transaction_date: str,
     notes: str = "",
@@ -179,7 +207,10 @@ def insert_trade(
         ticker: Stock ticker symbol
         transaction_type: 'buy' or 'sell'
         shares: Number of shares (positive)
-        price_eur: Price per share in EUR
+        price: Price per share in native currency (e.g., USD)
+        price_currency: Native currency code (e.g., "USD", "EUR")
+        price_eur: Price per share converted to EUR
+        fx_rate: FX rate used for EUR conversion (quote per base)
         commission: Commission/fees in EUR
         transaction_date: Date in ISO format (YYYY-MM-DD)
         notes: Optional description
@@ -189,6 +220,8 @@ def insert_trade(
     """
     conn = get_connection()
     try:
+        ticker_upper = ticker.upper()
+
         # Insert trade
         conn.execute(
             """
@@ -198,37 +231,52 @@ def insert_trade(
                 transaction_type,
                 shares,
                 price,
+                price_currency,
                 price_eur,
+                fx_rate,
                 commission,
                 transaction_date,
                 notes
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 portfolio_id,
-                ticker.upper(),
+                ticker_upper,
                 transaction_type,
                 shares,
-                price_eur,  # Store as both price and price_eur for simplicity
+                price,
+                price_currency.upper(),
                 price_eur,
+                fx_rate,
                 commission,
                 transaction_date,
                 notes,
             ),
         )
 
+        # Auto-populate ticker_regions if not already set
+        existing_regions = get_ticker_regions([ticker_upper])
+        if ticker_upper not in existing_regions:
+            inferred_region = _infer_region_from_ticker(ticker_upper)
+            upsert_ticker_regions({ticker_upper: inferred_region})
+
         # Create automatic cash entry
-        ticker_upper = ticker.upper()
         cash_amount = shares * price_eur + commission
+
+        # Format cash note with native and EUR prices
+        if price_currency.upper() == "EUR":
+            price_display = f"€{price:.2f}"
+        else:
+            price_display = f"{price_currency.upper()} {price:.2f} (€{price_eur:.2f})"
 
         if transaction_type == "buy":
             cash_type = "debit"
-            cash_note = f"Bought {shares:.4f} {ticker_upper} shares at €{price_eur:.2f}/share"
+            cash_note = f"Bought {shares:.4f} {ticker_upper} shares at {price_display}/share"
         else:  # sell
             cash_type = "credit"
             cash_amount = shares * price_eur - commission  # Subtract commission from proceeds
-            cash_note = f"Sold {shares:.4f} {ticker_upper} shares at €{price_eur:.2f}/share"
+            cash_note = f"Sold {shares:.4f} {ticker_upper} shares at {price_display}/share"
 
         # Check if identical cash entry already exists (idempotency)
         existing = conn.execute(

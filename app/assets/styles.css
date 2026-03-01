@@ -5,6 +5,9 @@
    Enforce one font everywhere (sidebar + pages + DataTable)
    ------------------------------------------------------------------ */
 :root{
+  /* Container width */
+  --container-max-width: 1400px;
+
   /* Dark theme: deep navy with blue gradients */
   --bg-0: #050B1A;
   --bg-1: #08142D;
@@ -75,195 +78,192 @@ input, button, textarea, select{
    ------------------------------------------------------------------ */
 .app-shell{
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
-/* Sidebar */
-.sidebar{
-  width: 260px;
-  background: rgba(6, 11, 26, 0.85);
-  border-right: 1px solid var(--border);
-  box-sizing: border-box;
-  padding: 18px 14px;
-  display: flex;
-  flex-direction: column;
-  transition: width 160ms ease;
-  position: relative;
-  overflow: hidden;
-  backdrop-filter: blur(8px);
+/* ------------------------------------------------------------------
+   Top Navigation Header
+   ------------------------------------------------------------------ */
+.app-header{
+  position: sticky;
+  top: 0;
+  width: 100%;
+  background: rgba(6, 11, 26, 0.95);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(16px) saturate(1.4);
+  z-index: 1000;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 4px 16px rgba(0, 0, 0, 0.18);
 }
 
-.sidebar.collapsed{ width: 78px; }
-
-/* Brand header row */
-.sidebar-top{ margin-bottom: 12px; }
-
-.brand-row{
+.header-inner{
+  max-width: var(--container-max-width);
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 32px;
+  padding: 10px 24px;
 }
 
-.brand{
+/* Brand (left) */
+.header-brand{
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
-}
-
-.brand-mark{
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: var(--brand);
-}
-
-.brand-stack{
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-}
-
-.brand-text{ font-weight: 700; font-size: 18px; }
-.brand-subtext{ font-size: 12px; color: var(--muted); margin-top: 4px; }
-
-.sidebar.collapsed .brand-stack{ display: none; }
-.sidebar.collapsed .brand-mark{ display: none; }
-.sidebar.collapsed .brand-row{ justify-content: center; }
-
-/* Icon-only toggle in header */
-.sidebar-toggle.icon-only{
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  margin: 4px auto 8px auto;
-  border: none;
-  background: transparent;
-  border-radius: 12px;
-  cursor: pointer;
-  color: var(--muted);
-}
-
-.sidebar-toggle.icon-only i{
-  font-size: 16px;
-  line-height: 1;
-}
-
-.sidebar-toggle.icon-only:hover{
-  background: var(--hover);
-  color: var(--text);
-}
-
-.sidebar.collapsed .sidebar-toggle.icon-only{
-  background: var(--brand-weak);
-  color: var(--brand);
-}
-
-/* Nav */
-.sidebar-nav{
-  flex: 1;
-  overflow: auto;
-  padding: 6px 4px;
-}
-
-.nav-section-title{
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted);
-  padding: 16px 10px 8px 10px;
-  letter-spacing: 0.04em;
-}
-
-.sidebar.collapsed .nav-section-title{ display: none; }
-
-.nav-section{
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.nav-item{
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 10px;
-  border-radius: 12px;
   text-decoration: none;
-  color: var(--text);
+  flex-shrink: 0;
+  transition: opacity 160ms ease;
 }
 
-.nav-item:hover{ 
-  color: rgba(255, 255, 255, 0.9);
+.header-brand:hover{
+  opacity: 0.88;
 }
 
-.nav-item.active .nav-icon{
-  color: rgba(255,255,255,0.95) !important;
-}
-
-.nav-icon{
-  width: 22px;
-  color: rgba(255, 255, 255, 0.75);
-  text-align: center;
-  font-size: 16px;
-  opacity: 0.95;
-}
-
-.nav-icon.fa-regular{
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.nav-label{
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.sidebar.collapsed .nav-label{ display: none; }
-
-/* Portfolio parent row: link on left + chevron on right */
-.nav-parent-row{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.nav-chevron{
-  width: 36px;
-  height: 36px;
-  margin-right: 6px;
+.header-brand .brand-mark{
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  box-shadow: 0 2px 8px rgba(45, 125, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
-  border: none;
-  background: transparent;
-  border-radius: 10px;
-  cursor: pointer;
-  color: var(--muted);
+  font-weight: 800;
+  font-size: 15px;
+  color: white;
+  letter-spacing: -0.5px;
 }
 
-.nav-chevron:hover{
-  background: var(--hover);
+.header-brand .brand-mark::before{
+  content: "M";
+}
+
+.header-brand .brand-text{
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  color: var(--text-strong);
+}
+
+/* Search (center) */
+.header-search{
+  flex: 1;
+  max-width: 420px;
+}
+
+.search-input{
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
   color: var(--text);
+  font-size: 13px;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+  opacity: 0.75;
 }
 
-.nav-submenu{
+.search-input:not(:disabled):hover{
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.search-input:focus{
+  outline: none;
+  opacity: 1;
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 0 0 3px rgba(45, 125, 255, 0.12);
+}
+
+.search-input::placeholder{
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+/* Navigation (right) */
+.header-nav{
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 4px;
-  margin: 2px 0 8px 0;
-  padding-left: 44px;
+  flex-shrink: 0;
 }
 
-.nav-subitem{
-  padding: 8px 10px;
+/* Dropdown container (pure CSS hover-based dropdown – no JavaScript) */
+.nav-dropdown{
+  position: relative;
 }
 
-/* Main */
+/* Dropdown toggle (hover target) */
+.nav-dropdown-toggle{
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 140ms ease, color 140ms ease;
+  white-space: nowrap;
+}
+
+.nav-dropdown-toggle:hover{
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-strong);
+}
+
+/* Dropdown menu (hidden by default) */
+.nav-dropdown-menu{
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 170px;
+  background: rgba(8, 14, 28, 0.98);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  padding: 6px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+  z-index: 9999;
+}
+
+.nav-dropdown:hover .nav-dropdown-menu{
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Dropdown items */
+.nav-dropdown-item{
+  display: block;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  color: var(--text);
+  text-decoration: none;
+  border-radius: 7px;
+  transition: background 120ms ease, color 120ms ease;
+  white-space: nowrap;
+}
+
+.nav-dropdown-item:hover{
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--text-strong);
+}
+
+/* Main content */
 .main{
   flex: 1;
-  padding: 18px;
+  max-width: var(--container-max-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px;
   box-sizing: border-box;
 }
 
@@ -290,6 +290,35 @@ input, button, textarea, select{
   display: flex;
   align-items: flex-end;
   gap: 12px;
+}
+
+.page-header-left{
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Today – AI Brief: force readable text (primary content must be white) */
+.today-ai-brief,
+.today-ai-brief * {
+  color: #ffffff !important;
+}
+
+/* Allow only the status line to be muted */
+.today-ai-brief .today-ai-status {
+  color: var(--text-muted) !important;
+}
+
+/* Placeholder should be white but visually secondary */
+.today-ai-brief .today-ai-placeholder {
+  color: #ffffff !important;
+  opacity: 0.85;
+  font-style: italic;
+}
+
+/* Action points label - slightly muted but still readable */
+.today-ai-brief .today-ai-label {
+  color: rgba(255, 255, 255, 0.75) !important;
 }
 
 .card{
@@ -876,13 +905,13 @@ textarea::placeholder{
 }
 
 /* ============================================================
-   Page header typography – align with sidebar brand
+   Page header typography – align with navbar brand
    ============================================================ */
 
 /* Page title */
 .page-header h2,
 .page-header .page-title{
-  font-size: 20px !important;          /* same as sidebar brand */
+  font-size: 20px !important;          /* consistent with navbar brand text */
   font-weight: 600 !important;
   line-height: 1.25;
   letter-spacing: 0.2px;
@@ -894,7 +923,7 @@ textarea::placeholder{
 /* Page subtitle */
 .page-header .page-subtitle,
 .page-header p{
-  font-size: 12.5px !important;        /* same scale as sidebar subtitle */
+  font-size: 12.5px !important;        /* consistent scale with navbar */
   font-weight: 500;
   line-height: 1.4;
   padding-left: 10px;
@@ -1459,4 +1488,455 @@ textarea::placeholder{
   background: var(--surface-2);
   transform: none;
   box-shadow: none;
+}
+
+/* =========================================================
+   BACKTEST STRATEGY DROPDOWN
+   Solid dark-blue, identical to Period dropdown
+   ========================================================= */
+
+/* ---------- Control (closed dropdown) ---------- */
+#tech-bt-strategy-select .Select-control {
+    background-color: #0b1a33;
+    border: 1px solid #1f3558;
+    border-radius: 8px;
+    min-height: 36px;
+    box-shadow: none;
+}
+
+/* Value text */
+#tech-bt-strategy-select .Select-value-label {
+    color: #e6edf5;
+    font-size: 13px;
+}
+
+/* Placeholder text */
+#tech-bt-strategy-select .Select-placeholder {
+    color: #9aa7b6;
+    font-size: 13px;
+}
+
+/* Arrow */
+#tech-bt-strategy-select .Select-arrow {
+    border-top-color: #9aa7b6;
+}
+
+/* Hover */
+#tech-bt-strategy-select .Select-control:hover {
+    border-color: #4c82ff;
+}
+
+/* Focus */
+#tech-bt-strategy-select.is-focused .Select-control {
+    border-color: #4c82ff;
+    box-shadow: 0 0 0 1px rgba(76, 130, 255, 0.35);
+}
+
+/* ---------- Dropdown menu (OPEN) ---------- */
+#tech-bt-strategy-select .Select-menu-outer {
+    background-color: #0b1a33;
+    border: 1px solid #1f3558;
+    border-radius: 8px;
+    margin-top: 4px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+    z-index: 1100;
+}
+
+/* Inner menu (prevents transparency bleed) */
+#tech-bt-strategy-select .Select-menu {
+    background-color: #0b1a33;
+}
+
+/* Options */
+#tech-bt-strategy-select .Select-option {
+    background-color: #0b1a33;
+    color: #e6edf5;
+    font-size: 13px;
+    padding: 8px 10px;
+}
+
+/* Hovered option */
+#tech-bt-strategy-select .Select-option.is-focused {
+    background-color: #132a4d;
+}
+
+/* Selected option */
+#tech-bt-strategy-select .Select-option.is-selected {
+    background-color: #163a66;
+    color: #ffffff;
+}
+
+/* =========================================================
+   OPTIONAL – REUSABLE SOLID DARK DROPDOWN CLASS
+   Apply className="dd-solid-dark" in Python
+   ========================================================= */
+
+.dd-solid-dark .Select-control {
+    background-color: #0b1a33;
+    border: 1px solid #1f3558;
+    border-radius: 8px;
+}
+
+.dd-solid-dark .Select-value-label {
+    color: #e6edf5;
+}
+
+.dd-solid-dark .Select-placeholder {
+    color: #9aa7b6;
+}
+
+.dd-solid-dark .Select-arrow {
+    border-top-color: #9aa7b6;
+}
+
+.dd-solid-dark .Select-menu-outer,
+.dd-solid-dark .Select-menu {
+    background-color: #0b1a33;
+    border: 1px solid #1f3558;
+    border-radius: 8px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.65);
+}
+
+.dd-solid-dark .Select-option {
+    background-color: #0b1a33;
+    color: #e6edf5;
+}
+
+.dd-solid-dark .Select-option.is-focused {
+    background-color: #132a4d;
+}
+
+.dd-solid-dark .Select-option.is-selected {
+    background-color: #163a66;
+    color: #ffffff;
+}
+
+/* ============================================================
+   Dash 4.x input dark theme
+   dcc.Input renders as <input class="dash-input">.
+   Dash 4's bundle applies --Dash-Fill-Inverse-Strong (#fff)
+   with higher specificity than the generic input[type] rules.
+   Override here globally — covers every dcc.Input in the app.
+   ============================================================ */
+
+.dash-input {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: var(--text) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 8px !important;
+  padding: 8px 10px !important;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif !important;
+  font-size: 13px !important;
+}
+
+.dash-input:focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(45, 125, 255, 0.20) !important;
+}
+
+.dash-input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Dash 4.x overrides for dd-solid-dark */
+.dd-solid-dark {
+  --Dash-Fill-Inverse-Strong:     #0b1a33;
+  --Dash-Stroke-Strong:           #1f3558;
+  --Dash-Text-Strong:             #e6edf5;
+  --Dash-Text-Weak:               #9aa7b6;
+  --Dash-Text-Disabled:           #6b7a8d;
+  --Dash-Fill-Primary-Hover:      #132a4d;
+  --Dash-Fill-Primary-Active:     #163a66;
+}
+
+.dd-solid-dark .dash-dropdown {
+  background: #0b1a33 !important;
+  border-color: #1f3558 !important;
+  color: #e6edf5 !important;
+  border-radius: 8px !important;
+  min-height: 36px !important;
+}
+
+.dd-solid-dark .dash-dropdown:hover {
+  border-color: #4c82ff !important;
+}
+
+.dd-solid-dark .dash-dropdown-placeholder {
+  color: #9aa7b6 !important;
+}
+
+/* =========================================================
+   FIX: Backtest dropdown menu gets clipped / goes under cards
+   Cause: accordion-item has overflow:hidden + stacking contexts
+   ========================================================= */
+
+/* 1) Let dropdown menus escape the accordion container */
+#tech-backtest-content .accordion,
+#tech-backtest-content .accordion-item,
+#tech-backtest-content .accordion-collapse,
+#tech-backtest-content .accordion-body{
+  overflow: visible !important;
+}
+
+/* Your base stylesheet sets .accordion-item{ overflow:hidden; } — override it here */
+#tech-backtest-content .accordion-item{
+  position: relative;
+  z-index: 1;
+}
+
+/* 2) Ensure the Strategy Builder card sits above the Results card */
+#tech-backtest-content{
+  position: relative;
+}
+
+#tech-backtest-content .card{
+  position: relative;
+  z-index: 1;
+  overflow: visible !important;
+}
+
+/* Make the card that contains the strategy dropdown higher in the stack */
+#tech-backtest-content .card:has(#tech-bt-strategy-select){
+  z-index: 50;
+}
+
+/* 3) Ensure the dropdown menu itself is always on top */
+#tech-backtest-content .dd-solid-dark{
+  position: relative;
+  z-index: 2000;
+}
+
+#tech-backtest-content .dd-solid-dark .Select,
+#tech-backtest-content .dd-solid-dark .Select-control{
+  position: relative;
+  z-index: 2001;
+}
+
+#tech-backtest-content .dd-solid-dark .Select-menu-outer{
+  position: absolute;
+  z-index: 99999 !important;
+}
+
+/* =========================================================
+   FIX (robust): Backtest dropdown menu goes behind Results card
+   Reason: .card uses backdrop-filter => stacking contexts
+   Solution: explicitly layer the two cards + menu z-index
+   ========================================================= */
+
+/* The callback renders: #tech-backtest-content > div (wrapper) > .card (builder) + .card (results) */
+#tech-backtest-content > div{
+  position: relative;
+}
+
+/* Strategy Builder card above */
+#tech-backtest-content > div > .card:first-child{
+  position: relative;
+  z-index: 2000 !important;
+  overflow: visible !important;
+}
+
+/* Backtest Results card below */
+#tech-backtest-content > div > .card:last-child{
+  position: relative;
+  z-index: 1 !important;
+}
+
+/* Make sure react-select menu is on top */
+#tech-backtest-content #tech-bt-strategy-select,
+#tech-backtest-content #tech-bt-saved-strategy{
+  position: relative;
+  z-index: 3000 !important;
+}
+
+#tech-backtest-content #tech-bt-strategy-select .Select-menu-outer,
+#tech-backtest-content #tech-bt-saved-strategy .Select-menu-outer{
+  z-index: 999999 !important;
+}
+
+/* Optional: if any accordion or card still clips, force visible */
+#tech-backtest-content .accordion-item,
+#tech-backtest-content .accordion-body,
+#tech-backtest-content .card{
+  overflow: visible !important;
+}
+
+/* ============================================================
+   Today page — Status Card Severity Styling
+   ============================================================ */
+
+/* Clickable status cards */
+.status-card-clickable {
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.status-card-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.50);
+}
+
+/* Severity: OK (green left border) */
+.status-card-ok {
+  border-left: 3px solid var(--ok);
+}
+
+/* Severity: Warning (yellow left border) */
+.status-card-warn {
+  border-left: 3px solid var(--warning);
+}
+
+/* Severity: Bad (red left border) */
+.status-card-bad {
+  border-left: 3px solid var(--danger);
+}
+
+/* Severity: Info (blue left border) */
+.status-card-info {
+  border-left: 3px solid var(--accent);
+}
+
+/* ============================================================
+   Today page — AI Brief Collapsible
+   ============================================================ */
+
+/* AI brief toggle button */
+.ai-brief-toggle-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.ai-brief-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* Collapsible content wrapper */
+.ai-brief-content-wrapper {
+  overflow: hidden;
+  transition: max-height 280ms ease, opacity 240ms ease;
+}
+
+.ai-brief-collapsed .ai-brief-content-wrapper {
+  max-height: 0;
+  opacity: 0;
+}
+
+.ai-brief-expanded .ai-brief-content-wrapper {
+  max-height: 800px;
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------
+   Refresh Button (Portfolio Overview only) - Styled like nav pills
+   ------------------------------------------------------------------ */
+.refresh-button {
+  display: none;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: rgba(255,255,255,0.62);
+  background: transparent;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.refresh-button:hover {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.82);
+}
+
+.refresh-button:active {
+  background: rgba(64,165,255,0.22);
+  color: rgba(255,255,255,0.95);
+  box-shadow:
+    0 8px 18px rgba(0,0,0,0.25),
+    0 0 0 1px rgba(64,165,255,0.35) inset;
+}
+
+.refresh-button:focus {
+  outline: none;
+  box-shadow:
+    0 0 0 3px rgba(64,165,255,0.18),
+    0 0 0 1px rgba(255,255,255,0.10) inset;
+}
+
+/* ============================================================
+   Dash 4.x dropdown dark theme
+   Dash 4 replaced react-select with its own component using
+   --Dash-* design tokens and new class names. Override here.
+   ============================================================ */
+
+/* Override design tokens on the dd-blend wrapper */
+.dd-blend {
+  --Dash-Fill-Inverse-Strong:     rgba(10, 24, 55, 0.92);
+  --Dash-Stroke-Strong:           rgba(255, 255, 255, 0.14);
+  --Dash-Text-Strong:             rgba(255, 255, 255, 0.92);
+  --Dash-Text-Weak:               rgba(255, 255, 255, 0.65);
+  --Dash-Text-Disabled:           rgba(255, 255, 255, 0.45);
+  --Dash-Fill-Interactive-Weak:   rgba(45, 125, 255, 0.12);
+  --Dash-Fill-Primary-Hover:      rgba(255, 255, 255, 0.06);
+  --Dash-Fill-Primary-Active:     rgba(255, 255, 255, 0.10);
+}
+
+/* Trigger (closed state) */
+.dd-blend .dash-dropdown {
+  background: rgba(10, 24, 55, 0.92) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  border-radius: 10px !important;
+  min-height: 38px !important;
+}
+
+.dd-blend .dash-dropdown:hover {
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
+/* Placeholder text */
+.dd-blend .dash-dropdown-placeholder {
+  color: rgba(255, 255, 255, 0.50) !important;
+}
+
+/* Open menu — portaled to <body>, cannot use .dd-blend ancestor */
+.dash-dropdown-content {
+  background: rgba(10, 18, 34, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.50) !important;
+}
+
+/* Search bar inside the open menu */
+.dash-dropdown-search-container {
+  background: rgba(10, 18, 34, 0.98) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+.dash-dropdown-search {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+/* Options list */
+.dash-dropdown-option {
+  color: rgba(255, 255, 255, 0.86) !important;
+  background: transparent !important;
+}
+
+.dash-dropdown-option:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.dash-dropdown-option[aria-selected="true"] {
+  background: rgba(255, 255, 255, 0.10) !important;
+  color: #ffffff !important;
 }
