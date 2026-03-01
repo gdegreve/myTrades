@@ -650,7 +650,6 @@ def layout() -> html.Div:
                 ],
             ) if DEBUG_DESIGN_PAGE else None,
         ],
-        style={"maxWidth": "1100px"},
     )
 
 

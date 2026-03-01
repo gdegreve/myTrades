@@ -464,7 +464,6 @@ def layout() -> html.Div:
                 ],
             ),
         ],
-        style={"maxWidth": "1100px"},
     )
 
 
@@ -1020,13 +1019,39 @@ def update_allocation_graphs(portfolio_id, mode):
     positions = compute_positions(trades)
     cash_balance = compute_cash_balance(cash_movements, trades)
     policy_snapshot = load_policy_snapshot(portfolio_id)
-    signals = get_signals_for_portfolio(portfolio_id)
 
+    # Get assignment map for signal evaluation
+    assignment_map = get_assignment_map(portfolio_id)
+
+    # Fetch prices for all position tickers first
     position_tickers = [p["ticker"] for p in positions]
+    prices, _ = get_latest_daily_closes_cached(position_tickers, max_age_minutes=60, force_refresh=False)
+
+    # Evaluate signals live for all positions with strategy assignments
+    signals = []
+    for position in positions:
+        ticker = position["ticker"]
+        saved_strategy_id = assignment_map.get(ticker)
+        if saved_strategy_id:
+            saved_strategy = get_saved_strategy_by_id(portfolio_id, saved_strategy_id)
+            if saved_strategy:
+                signal_result = evaluate_position_signal(
+                    ticker=ticker,
+                    saved_strategy=saved_strategy,
+                    current_price=prices.get(ticker, 0.0),
+                    trades=trades,
+                )
+                if signal_result and signal_result.get("signal") and signal_result["signal"] != "HOLD":
+                    signals.append({
+                        "ticker": ticker,
+                        "signal": signal_result["signal"],
+                        "reason": signal_result.get("reason", ""),
+                        "strategy_key": saved_strategy["base_strategy_key"],
+                    })
+
+    # Build complete ticker list
     signal_tickers = [s["ticker"] for s in signals]
     all_tickers = list(set(position_tickers + signal_tickers))
-
-    prices, _ = get_latest_daily_closes_cached(all_tickers, max_age_minutes=60, force_refresh=False)
 
     ticker_metadata = {}
     for ticker in all_tickers:

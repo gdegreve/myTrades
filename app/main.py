@@ -11,6 +11,7 @@ from app.db.overview_repo import get_intraday_prices
 from app.layout import build_layout
 from app.db.schema import ensure_schema
 from app.pages import (
+    page_today,
     portfolio_overview,
     portfolio_manage,
     portfolio_design,
@@ -96,7 +97,9 @@ def sparkline_png(ticker: str):
     Input("url", "pathname"),
 )
 def route(pathname: str):
-    if pathname in (None, "/", "/portfolio/overview"):
+    if pathname in (None, "/", "/today"):
+        return page_today.layout()
+    if pathname == "/portfolio/overview":
         return portfolio_overview.layout()
     if pathname == "/portfolio/manage":
         return portfolio_manage.layout()
@@ -105,7 +108,7 @@ def route(pathname: str):
     if pathname == "/portfolio/signals":
         return portfolio_signals.layout()
     if pathname == "/portfolio/rebalance":
-        return portfolio_rebalance.layout() 
+        return portfolio_rebalance.layout()
     if pathname == "/analysis/fundamental":
         return analysis_fundamental.layout()
     if pathname == "/analysis/technical":

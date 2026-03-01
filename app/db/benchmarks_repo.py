@@ -780,3 +780,37 @@ def get_ticker_snapshot_detail(benchmark_id: int, ticker: str) -> dict | None:
         return dict(row) if row else None
     finally:
         conn.close()
+
+
+def get_latest_fundamentals_for_ticker(ticker: str) -> dict[str, Any] | None:
+    """Get latest fundamental snapshot for a ticker across any benchmark.
+
+    Returns the most recently updated row for the given ticker.
+    Useful for Capital Allocation Score computation.
+
+    Returns:
+        Dict with bench_score_total, bench_confidence, and other fields, or None if not found.
+    """
+    conn = get_connection()
+    try:
+        cur = conn.execute(
+            """
+            SELECT
+                ticker,
+                bench_score_total,
+                bench_score_quality,
+                bench_score_safety,
+                bench_score_value,
+                bench_confidence,
+                updated_at
+            FROM benchmark_fundamentals
+            WHERE ticker = ? AND status = 'ok'
+            ORDER BY updated_at DESC
+            LIMIT 1
+            """,
+            (ticker,),
+        )
+        row = cur.fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()

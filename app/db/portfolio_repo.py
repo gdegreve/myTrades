@@ -16,3 +16,33 @@ def list_portfolios() -> list[dict[str, Any]]:
             """
         )
         return [dict(r) for r in cur.fetchall()]
+
+
+def get_active_portfolio_ids(exclude_watchlist: bool = True) -> list[int]:
+    """Get list of active portfolio IDs.
+
+    Args:
+        exclude_watchlist: If True, exclude portfolios named "Watchlist" (case-insensitive)
+
+    Returns:
+        List of portfolio IDs
+    """
+    with get_connection() as conn:
+        if exclude_watchlist:
+            cur = conn.execute(
+                """
+                SELECT id
+                FROM portfolios
+                WHERE LOWER(name) != 'watchlist'
+                ORDER BY id ASC
+                """
+            )
+        else:
+            cur = conn.execute(
+                """
+                SELECT id
+                FROM portfolios
+                ORDER BY id ASC
+                """
+            )
+        return [row["id"] for row in cur.fetchall()]

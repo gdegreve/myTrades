@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.db.prices_repo import get_latest_daily_closes, upsert_daily_closes
+from app.services.fx_service import get_ticker_currency
 
 # Debug flag: set to True to print yfinance DataFrame structure diagnostics
 DEBUG_YFINANCE = True
@@ -50,7 +51,8 @@ def get_latest_daily_closes_cached(
     Price Policy:
         - Uses yfinance.download with interval='1d', period='10d'
         - Takes most recent available daily close from returned data
-        - Assumes prices are in EUR (no FX conversion yet)
+        - Detects native currency from yfinance Ticker.info
+        - Stores prices with actual currency (USD, EUR, GBP, etc.)
     """
     if not tickers:
         return {}, []
@@ -99,7 +101,7 @@ def get_latest_daily_closes_cached(
                     "symbol": ticker,
                     "date": data["date"],
                     "close": data["close"],
-                    "currency": "EUR",  # Assume EUR for now
+                    "currency": data["currency"],  # Actual currency from yfinance
                     "provider": "yfinance",
                 }
                 for ticker, data in fetched_prices.items()
@@ -127,7 +129,7 @@ def _fetch_yfinance_batch(tickers: list[str]) -> tuple[dict[str, dict[str, Any]]
 
     Returns:
         Tuple of:
-        - Dict mapping ticker -> {"close": float, "date": str (YYYY-MM-DD)}
+        - Dict mapping ticker -> {"close": float, "date": str (YYYY-MM-DD), "currency": str}
         - List of tickers that failed to fetch
 
     Implementation:
@@ -195,9 +197,11 @@ def _fetch_yfinance_batch(tickers: list[str]) -> tuple[dict[str, dict[str, Any]]
             if close_series is not None and not close_series.empty:
                 latest_date = close_series.index[-1]
                 latest_close = close_series.iloc[-1]
+                currency = get_ticker_currency(ticker)
                 result[ticker] = {
                     "close": float(latest_close),
                     "date": latest_date.strftime("%Y-%m-%d"),
+                    "currency": currency,
                 }
             else:
                 errors.append(ticker)
@@ -224,9 +228,11 @@ def _fetch_yfinance_batch(tickers: list[str]) -> tuple[dict[str, dict[str, Any]]
                     if close_series is not None and not close_series.empty:
                         latest_date = close_series.index[-1]
                         latest_close = close_series.iloc[-1]
+                        currency = get_ticker_currency(ticker)
                         result[ticker] = {
                             "close": float(latest_close),
                             "date": latest_date.strftime("%Y-%m-%d"),
+                            "currency": currency,
                         }
                     else:
                         errors.append(ticker)

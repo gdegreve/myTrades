@@ -494,7 +494,11 @@ def layout() -> html.Div:
                                 children=[
                                     html.Div(
                                         children=[
-                                            html.Div("Price (EUR)", className="field-label"),
+                                            html.Div(
+                                                id="trade-price-label",
+                                                children="Price",
+                                                className="field-label",
+                                            ),
                                             dcc.Input(
                                                 id="trade-price",
                                                 type="number",
@@ -595,7 +599,6 @@ def layout() -> html.Div:
                 ],
             ),
         ],
-        style={"maxWidth": "1100px"},
     )
 
 
@@ -1317,6 +1320,25 @@ def handle_cash_transaction(n_clicks, portfolio_id, cash_type, amount, date, not
 
 
 @callback(
+    Output("trade-price-label", "children"),
+    Input("trade-ticker", "value"),
+    prevent_initial_call=True,
+)
+def update_price_currency_label(ticker):
+    """Dynamically update price field label when ticker changes."""
+    if not ticker or not ticker.strip():
+        return "Price"
+
+    from app.services.fx_service import get_ticker_currency
+
+    try:
+        currency = get_ticker_currency(ticker.strip().upper())
+        return f"Price ({currency})"
+    except Exception:
+        return "Price"
+
+
+@callback(
     Output("holdings-status", "children", allow_duplicate=True),
     Output("holdings-refresh-trigger", "data", allow_duplicate=True),
     Output("trade-ticker", "value"),
@@ -1340,18 +1362,28 @@ def handle_trade_execution(n_clicks, portfolio_id, action, ticker, qty, price, c
     if not n_clicks or portfolio_id is None:
         raise PreventUpdate
 
+    # Detect ticker currency and convert to EUR FIRST (needed for validation)
+    from app.services.fx_service import get_ticker_currency, convert_to_eur
+
+    ticker_upper = ticker.strip().upper()
+    price_currency = get_ticker_currency(ticker_upper)
+
+    # Convert price to EUR
+    price_native = price  # User-entered price in native currency
+    price_eur, fx_rate = convert_to_eur(price_native, price_currency, date)
+
     # Get current state for validation
     trades = list_trades(portfolio_id, limit=1000)
     cash_movements = list_cash_movements(portfolio_id, limit=1000)
     positions = compute_positions(trades)
     current_balance = compute_cash_balance(cash_movements, trades)
 
-    # Validate inputs
+    # Validate inputs (using EUR-converted price)
     is_valid, error_msg = validate_trade(
         transaction_type=action,
         ticker=ticker,
         shares=qty,
-        price=price,
+        price=price_eur,  # Use EUR price for validation
         commission=commission,
         current_balance=current_balance,
         current_positions=positions,
@@ -1373,14 +1405,17 @@ def handle_trade_execution(n_clicks, portfolio_id, action, ticker, qty, price, c
         # Keep current values unchanged (no_update for refresh trigger and inputs)
         return error_status, no_update, no_update, no_update, no_update, no_update, no_update
 
-    # Insert trade
+    # Insert trade with all currency fields
     try:
         insert_trade(
             portfolio_id=portfolio_id,
-            ticker=ticker,
+            ticker=ticker_upper,
             transaction_type=action,
             shares=qty,
-            price_eur=price,
+            price=price_native,
+            price_currency=price_currency,
+            price_eur=price_eur,
+            fx_rate=fx_rate,
             commission=commission or 0.0,
             transaction_date=date,
             notes=note or "",
@@ -1401,8 +1436,15 @@ def handle_trade_execution(n_clicks, portfolio_id, action, ticker, qty, price, c
 
     # Success status
     action_text = action.upper()
+
+    # Format success message with currency info
+    if price_currency != "EUR":
+        price_display = f"{price_currency} {price_native:.2f} (€{price_eur:.2f})"
+    else:
+        price_display = f"€{price:.2f}"
+
     success_status = html.Div(
-        f"{action_text} {qty} shares of {ticker.upper()} at €{price:.2f} executed successfully",
+        f"{action_text} {qty} shares of {ticker_upper} at {price_display} executed successfully",
         style={
             "color": "#155724",
             "backgroundColor": "#d4edda",

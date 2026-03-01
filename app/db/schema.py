@@ -140,6 +140,29 @@ def ensure_schema() -> None:
             """
         )
 
+        # FX rates table for currency conversion.
+        # Stores historical exchange rates for multi-currency portfolio support.
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS fx_rates (
+                base_currency TEXT NOT NULL,
+                quote_currency TEXT NOT NULL,
+                rate REAL NOT NULL,
+                date TEXT NOT NULL,
+                fetched_at TEXT NOT NULL,
+                provider TEXT DEFAULT 'yfinance',
+                UNIQUE(base_currency, quote_currency, date)
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_fx_rates_pair_date
+            ON fx_rates(base_currency, quote_currency, date);
+            """
+        )
+
         # Strategy definitions table (signal generation strategies)
         cur.execute(
             """
