@@ -13,6 +13,115 @@ def ensure_schema() -> None:
     with get_connection() as con:
         cur = con.cursor()
 
+        # Core domain tables — these must be created first as others reference them.
+
+        # Portfolios (one row per portfolio, holds cash balance).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS portfolios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                cash_balance REAL NOT NULL DEFAULT 0.0,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            """
+        )
+
+        # Holdings (current position snapshot, updated on trade insert).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS holdings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                total_shares REAL NOT NULL DEFAULT 0.0,
+                avg_cost REAL NOT NULL DEFAULT 0.0,
+                last_updated TEXT DEFAULT (datetime('now')),
+                UNIQUE(portfolio_id, ticker),
+                FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_holdings_portfolio
+            ON holdings(portfolio_id);
+            """
+        )
+
+        # Transactions (buy/sell trade ledger).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                ticker TEXT NOT NULL,
+                transaction_type TEXT NOT NULL,
+                shares REAL NOT NULL,
+                price REAL NOT NULL,
+                price_currency TEXT NOT NULL DEFAULT 'EUR',
+                price_eur REAL NOT NULL,
+                fx_rate REAL NOT NULL DEFAULT 1.0,
+                commission REAL NOT NULL DEFAULT 0.0,
+                transaction_date TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_transactions_portfolio_date
+            ON transactions(portfolio_id, transaction_date);
+            """
+        )
+
+        # Cash transactions (deposits, withdrawals, and auto-generated trade cash entries).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cash_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                portfolio_id INTEGER NOT NULL,
+                cash_type TEXT NOT NULL,
+                amount_eur REAL NOT NULL,
+                transaction_date TEXT NOT NULL,
+                notes TEXT DEFAULT '',
+                FOREIGN KEY (portfolio_id) REFERENCES portfolios(id) ON DELETE CASCADE
+            );
+            """
+        )
+
+        cur.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_cash_transactions_portfolio_date
+            ON cash_transactions(portfolio_id, transaction_date);
+            """
+        )
+
+        # Ticker sector metadata (ticker → sector name, used for sector breakdown).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ticker_sectors (
+                ticker TEXT PRIMARY KEY,
+                sector TEXT NOT NULL,
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            """
+        )
+
+        # Ticker region metadata (ticker → region name, used for region breakdown).
+        cur.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ticker_regions (
+                ticker TEXT PRIMARY KEY,
+                region TEXT NOT NULL,
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+            """
+        )
+
         # Policy table (one row per portfolio).
         # Keep this minimal and extendable. Fields can be added later via migrations.
         cur.execute(
